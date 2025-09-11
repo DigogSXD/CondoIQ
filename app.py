@@ -1,25 +1,27 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
-from sqlalchemy import create_engine, or_
+from sqlalchemy import create_engine, or_, Column, Integer, String, Date, ForeignKey, Table, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy_utils import database_exists, create_database
 import bcrypt
 import re
 import secrets
 import datetime
-from sqlalchemy import Column, Integer, String, Date, ForeignKey, Table, Boolean
+from smtplib import SMTPException
 
 # ============================================
 # Configurações do Banco de Dados e Modelos
 # ============================================
-usuario = 'root'
-senha = '12345678'
-host = 'localhost'
-banco = 'CondoIQ'
-url = f"mysql+pymysql://{usuario}:{senha}@{host}/{banco}?charset=utf8mb4"
+# Em produção (Render), configure a env var DATABASE_URL, ex.:
+# mysql+pymysql://USER:PASS@HOST/DB?charset=utf8mb4&ssl=true
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "mysql+pymysql://root:12345678@localhost/CondoIQ?charset=utf8mb4"
+)
 
-engine = create_engine(url, echo=True)
+engine = create_engine(DATABASE_URL, echo=False)
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -91,9 +93,13 @@ class Reuniao(Base):
     condominio = relationship("Condominio", back_populates="reunioes")
     participantes = relationship("Usuario", secondary=reuniao_participantes, back_populates="reunioes")
 
+
 def criar_database_se_nao_existir():
-    if not database_exists(engine.url):
-        create_database(engine.url)
+    # Em provedores gerenciados (ex.: PlanetScale) não crie DB via app
+    if "localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL:
+        if not database_exists(engine.url):
+            create_database(engine.url)
+
 
 def criar_tabelas():
     Base.metadata.create_all(engine)
@@ -101,7 +107,7 @@ def criar_tabelas():
 # -------------------------------------------------------------
 # Configuração do Flask
 app = Flask(__name__)
-app.secret_key = 'troque_esta_chave_por_uma_muito_secreta'
+app.secret_key = os.getenv("SECRET_KEY", "troque_esta_chave_por_uma_muito_secreta")
 
 # Flask-Login
 login_manager = LoginManager()
@@ -116,17 +122,36 @@ def load_user(user_id):
     finally:
         session_db.close()
 
-# Configurações de email (ajuste para variáveis de ambiente em produção)
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'tueursprimecs2@gmail.com'
-app.config['MAIL_PASSWORD'] = 'sgoz cask wxad onsb'
-app.config['MAIL_DEFAULT_SENDER'] = 'no-reply@condoiq.com'
+# -------------------------------------------------------------
+# E-mail via variáveis de ambiente (Render)
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', '587'))
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'true').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')          # ex.: seu_email@gmail.com
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')          # ex.: senha de app / API key SMTP
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', app.config['MAIL_USERNAME'])
 mail = Mail(app)
+
+
+def send_email(subject: str, recipients: list[str], body: str, html: str | None = None) -> bool:
+    """Helper com tratamento de erro para envio de e-mails."""
+    if not app.config.get('MAIL_USERNAME') or not app.config.get('MAIL_PASSWORD'):
+        app.logger.error('MAIL_USERNAME/MAIL_PASSWORD não configurados.')
+        return False
+    try:
+        msg = Message(subject=subject, recipients=recipients)
+        msg.body = body
+        if html:
+            msg.html = html
+        mail.send(msg)
+        return True
+    except SMTPException as e:
+        app.logger.exception(f'Falha ao enviar e-mail: {e}')
+        return False
 
 # -------------------------------------------------------------
 # Funções auxiliares
+
 def requer_sindico(usuario_ativo):
     if not usuario_ativo or usuario_ativo.tipo != TIPO_SINDICO:
         abort(403)
@@ -160,16 +185,21 @@ def register():
                 if session_db.query(Usuario).filter_by(email=email).first():
                     flash('Email já cadastrado!', 'error')
                     return redirect(url_for('register'))
-                
+
                 # Envio do email com código de verificação
                 verification_code = secrets.token_hex(3)
                 session['verification_code'] = verification_code
                 session['pending_registration'] = {'nome': nome, 'email': email, 'senha': senha}
-                msg = Message('Código de Verificação - CondoIQ',
-                              recipients=[email],
-                              body=f'Seu código de verificação é: {verification_code}')
-                if mail:
-                    mail.send(msg)
+
+                enviado = send_email(
+                    'Código de Verificação - CondoIQ',
+                    [email],
+                    f'Seu código de verificação é: {verification_code}'
+                )
+                if not enviado:
+                    flash('Não foi possível enviar o e-mail de verificação. Verifique as configurações de e-mail.', 'error')
+                    return redirect(url_for('register'))
+
                 flash('Um código de verificação foi enviado para o seu email. Insira-o para confirmar.', 'success')
                 return redirect(url_for('register', step='verify'))
             else:
@@ -177,7 +207,7 @@ def register():
                 if not codigo or codigo != session.get('verification_code'):
                     flash('Código de verificação inválido!', 'error')
                     return redirect(url_for('register', step='verify'))
-                
+
                 # Registro final
                 hashed_senha = bcrypt.hashpw(session['pending_registration']['senha'].encode('utf-8'), bcrypt.gensalt())
                 condominio_existente = session_db.query(Condominio).first()
@@ -217,7 +247,7 @@ def register():
             return redirect(url_for('register', step=step))
         finally:
             session_db.close()
-    
+
     if step == 'verify':
         return render_template('verify.html')
     return render_template('register.html')
@@ -243,12 +273,8 @@ def login():
 
             # Se o cadastro está pendente de aprovação do síndico:
             if usuario.tipo == TIPO_PENDENTE:
-                # Opção A: usar flash + redirect pra reapresentar o login
                 flash('Seu cadastro foi realizado, mas o síndico precisa aprovar antes de você acessar o sistema.', 'warning')
                 return redirect(url_for('login'))
-
-                # Opção B (alternativa): renderizar com mensagem inline
-                # return render_template('login.html', msg='Seu cadastro foi realizado, mas o síndico precisa aprovar antes de você acessar o sistema.')
 
             # Caso OK: efetua login
             login_user(usuario)
@@ -277,11 +303,16 @@ def forgot_password():
                 reset_code = secrets.token_hex(3)
                 session['reset_code'] = reset_code
                 session['reset_email'] = email
-                msg = Message('Código de Redefinição de Senha - CondoIQ',
-                              recipients=[email],
-                              body=f'Seu código de redefinição de senha é: {reset_code}')
-                if mail:
-                    mail.send(msg)
+
+                enviado = send_email(
+                    'Código de Redefinição de Senha - CondoIQ',
+                    [email],
+                    f'Seu código de redefinição de senha é: {reset_code}'
+                )
+                if not enviado:
+                    flash('Não foi possível enviar o e-mail de redefinição. Verifique as configurações de e-mail.', 'error')
+                    return redirect(url_for('forgot_password'))
+
                 flash('Um código de redefinição foi enviado para o seu email. Insira-o para continuar.', 'success')
                 return redirect(url_for('forgot_password', step='verify'))
             elif step == 'verify':
@@ -342,16 +373,16 @@ def dashboard():
             despesas_condominio = session_db.query(Despesa).filter_by(condominio_id=condominio.id).all()
             reunioes_condominio = session_db.query(Reuniao).filter_by(condominio_id=condominio.id).all()
             moradores_condominio = session_db.query(Usuario).filter(Usuario.condominio_id == condominio.id).count()
-            return render_template('dashboard_sindico.html', 
-                                   condominio=condominio, 
+            return render_template('dashboard_sindico.html',
+                                   condominio=condominio,
                                    user=usuario_ativo,
                                    despesas=despesas_condominio,
                                    reunioes=reunioes_condominio,
                                    moradores=moradores_condominio)
         else:
             reunioes_morador = usuario_ativo.reunioes
-            return render_template('dashboard_morador.html', 
-                                   condominio=condominio, 
+            return render_template('dashboard_morador.html',
+                                   condominio=condominio,
                                    user=usuario_ativo,
                                    reunioes=reunioes_morador)
     except Exception as e:
@@ -361,7 +392,7 @@ def dashboard():
         session_db.close()
 
 # ===========================
-# NOVO: Gerenciar moradores (pendentes)
+# Gerenciar moradores (pendentes)
 # ===========================
 @app.route('/moradores/pendentes')
 @login_required
@@ -405,6 +436,10 @@ def aprovar_morador(usuario_id):
         morador.tipo = TIPO_MORADOR
         morador.is_ativo = True
         session_db.commit()
+        
+        # Exemplo opcional: notificar aprovação por e-mail (se quiser habilitar)
+        # send_email('Sua conta foi aprovada - CondoIQ', [morador.email], f'Olá {morador.nome}, sua conta foi aprovada.')
+
         flash('Morador aprovado com sucesso!', 'success')
         return redirect(url_for('moradores_pendentes'))
     except Exception as e:
@@ -437,6 +472,10 @@ def negar_morador(usuario_id):
         # session_db.delete(morador)
 
         session_db.commit()
+        
+        # Exemplo opcional: notificar negação por e-mail
+        # send_email('Seu cadastro foi negado - CondoIQ', [morador.email], f'Olá {morador.nome}, seu cadastro foi negado.')
+
         flash('Registro negado com sucesso.', 'success')
         return redirect(url_for('moradores_pendentes'))
     except Exception as e:
@@ -446,6 +485,8 @@ def negar_morador(usuario_id):
     finally:
         session_db.close()
 
+# -------------------------------------------------------------
+# Execução local (em produção use gunicorn)
 # -------------------------------------------------------------
 if __name__ == '__main__':
     criar_database_se_nao_existir()
