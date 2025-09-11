@@ -19,7 +19,14 @@ DATABASE_URL = os.getenv(
     "mysql+pymysql://root:12345678@localhost/CondoIQ?charset=utf8mb4"
 )
 
-engine = create_engine(DATABASE_URL, echo=False)
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,      # testa a conexão antes de usar (reabre se estiver morta)
+    pool_recycle=280,        # recicla conexões ociosas (Aiven/Render derrubam após inatividade)
+    connect_args={"ssl": {"ssl_mode": "REQUIRED"}} if "aivencloud.com" in DATABASE_URL else {}
+)
+
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
