@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>CondoIQ - Dashboard Síndico</title>
+    <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <a href="{{ url_for('dashboard') }}" class="logo-link">
+                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo CondoIQ" class="logo-img">
+            </a>
+            <nav>
+                <ul>
+                    <li class="active"><a href="{{ url_for('dashboard') }}">Home</a></li>
+                    <li><a href="#">Finanças</a></li>
+                    <li><a href="#">Agenda</a></li>
+                    <li><a href="#">Manutenção</a></li>
+                    <!-- Ajustado para a rota de pendentes do síndico -->
+                    <li><a href="{{ url_for('moradores_pendentes') }}">Moradores</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <h1>Painel do Síndico</h1>
+                <div class="user-actions">
+                    <p>Bem-vindo, {{ user.nome }}!</p>
+                    <a href="{{ url_for('logout') }}">Sair</a>
+                </div>
+            </header>
+
+            <!-- Mensagens flash (opcional, caso use flash no backend) -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <div class="flash-container">
+                  {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+
+            <section class="cards">
+                <div class="card">
+                    <h3>Moradores Cadastrados</h3>
+                    <p class="valor">{{ moradores }}</p>
+                    <small>Total de usuários no condomínio</small>
+                </div>
+
+                <div class="card">
+                    <h3>Reuniões Agendadas</h3>
+                    {% if reunioes and reunioes|length > 0 %}
+                        {% set reunioes_ordenadas = reunioes|sort(attribute='data') %}
+                        <p>{{ reunioes|length }} reunião(ões)</p>
+                        <small>Última: {{ reunioes_ordenadas[-1].data.strftime('%d/%m/%Y') }}</small>
+                    {% else %}
+                        <p>Nenhuma reunião</p>
+                    {% endif %}
+                </div>
+
+                <div class="card">
+                    <h3>Despesas Registradas</h3>
+                    {% if despesas and despesas|length > 0 %}
+                        {% set despesas_ordenadas = despesas|sort(attribute='data') %}
+                        <p>{{ despesas|length }} despesa(s)</p>
+                        <small>Última: {{ despesas_ordenadas[-1].data.strftime('%d/%m/%Y') }}</small>
+                    {% else %}
+                        <p>Nenhuma despesa</p>
+                    {% endif %}
+                </div>
+
+                <!-- Atalho para aprovação de moradores pendentes -->
+                <div class="card">
+                    <h3>Gerenciar Moradores</h3>
+                    <p>Analise e aprove cadastros pendentes.</p>
+                    <a class="btn" href="{{ url_for('moradores_pendentes') }}">Ir para Pendentes</a>
+                </div>
+            </section>
+
+            <section class="info-condominio">
+                <h2>Informações do Condomínio</h2>
+                <p><strong>Nome:</strong> {{ condominio.nome }}</p>
+                <p><strong>Endereço:</strong> {{ condominio.endereco }}</p>
+                <p><strong>CNPJ:</strong> {{ condominio.cnpj if condominio.cnpj else '—' }}</p>
+                <p><strong>Email:</strong> {{ condominio.email if condominio.email else '—' }}</p>
+            </section>
+
+            <section class="comunicados">
+                <h2>Comunicados Recentes</h2>
+                {% if reunioes and reunioes|length > 0 %}
+                    {% set reunioes_desc = reunioes|sort(attribute='data', reverse=true) %}
+                    {% for reuniao in reunioes_desc %}
+                        <div class="comunicado">
+                            <p><strong>Reunião:</strong> {{ reuniao.titulo }}</p>
+                            <small>Data: {{ reuniao.data.strftime('%d/%m/%Y') }}</small>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p>Ainda não há anúncios.</p>
+                {% endif %}
+            </section>
+        </main>
+    </div>
+</body>
+</html>

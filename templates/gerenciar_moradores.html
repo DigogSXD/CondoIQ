@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Gerenciar Moradores Pendentes</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    /* ====== Base / Layout ====== */
+    :root{
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --text:#0f172a;
+      --muted:#6b7280;
+      --line:#e5e7eb;
+      --success:#16a34a;
+      --danger:#dc2626;
+      --warning:#d97706;
+      --primary:#4f46e5;
+      --shadow:0 10px 30px rgba(2,6,23,.06);
+      --radius:14px;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      margin:0; color:var(--text); background:var(--bg);
+    }
+    .page{
+      max-width: 1100px; margin: 32px auto; padding: 0 20px;
+    }
+
+    /* ====== Header ====== */
+    .header{
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:18px;
+    }
+    .title-wrap{
+      display:flex; align-items:center; gap:12px;
+    }
+    .title{
+      font-size: clamp(22px, 3vw, 28px); margin:0;
+    }
+    .subtitle{
+      color:var(--muted); margin:4px 0 0; font-size:14px;
+    }
+    .badge-count{
+      background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe;
+      padding:6px 10px; border-radius:999px; font-weight:600; font-size:12px;
+    }
+
+    /* ====== Flash ====== */
+    .flash-container{ margin-bottom:16px; }
+    .flash{
+      padding:12px 14px; border-radius:10px; margin-bottom:10px; font-size:14px;
+      border:1px solid var(--line); background:var(--card); box-shadow:var(--shadow);
+    }
+    .flash.success{ border-color:#86efac; background:#f0fdf4; color:#14532d; }
+    .flash.error{ border-color:#fca5a5; background:#fef2f2; color:#7f1d1d; }
+    .flash.warning{ border-color:#facc15; background:#fffbeb; color:#7c2d12; }
+
+    /* ====== Toolbar ====== */
+    .toolbar{
+      display:flex; gap:12px; align-items:center; margin: 18px 0 14px;
+      flex-wrap:wrap;
+    }
+    .search{
+      flex:1 1 280px; position:relative;
+    }
+    .search input{
+      width:100%; padding:12px 14px 12px 40px; border:1px solid var(--line);
+      border-radius:10px; background:var(--card); outline:none;
+      box-shadow:var(--shadow);
+    }
+    .search-icon{
+      position:absolute; left:12px; top:50%; transform:translateY(-50%);
+      font-size:16px; color:var(--muted);
+    }
+    .btn{
+      padding:10px 14px; border-radius:10px; border:1px solid var(--line);
+      background:var(--card); cursor:pointer; font-weight:600;
+      transition:.15s transform ease, .15s filter ease; box-shadow:var(--shadow);
+    }
+    .btn:hover{ transform:translateY(-1px); filter:brightness(0.98); }
+    .btn-primary{ background:var(--primary); color:#fff; border-color:transparent; }
+    .btn-ghost{ background:#fff; }
+
+    /* ====== Card ====== */
+    .card{
+      background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+      box-shadow:var(--shadow); padding:18px; margin-bottom:14px;
+    }
+
+    /* ====== Tabela ====== */
+    .table-wrap{
+      overflow:auto; border-radius:12px; border:1px solid var(--line);
+      background:var(--card); box-shadow:var(--shadow);
+    }
+    table{ width:100%; border-collapse:collapse; min-width:720px; }
+    thead th{
+      text-align:left; font-size:12px; letter-spacing:.02em; text-transform:uppercase;
+      color:var(--muted); background:#fafafa; border-bottom:1px solid var(--line); padding:12px;
+      position:sticky; top:0; z-index:1;
+    }
+    tbody td{ padding:14px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+    tbody tr:hover{ background:#fafafa; }
+
+    .user-cell{ display:flex; align-items:center; gap:12px; }
+    .avatar{
+      width:36px; height:36px; border-radius:50%; display:inline-grid; place-items:center;
+      background:#eef2ff; color:#3730a3; font-weight:700; border:1px solid #c7d2fe;
+    }
+    .user-meta small{ color:var(--muted); font-size:12px; display:block; }
+
+    .actions{ display:flex; gap:8px; flex-wrap:wrap; }
+    .btn-success{ background:var(--success); color:#fff; border:none; }
+    .btn-danger{ background:var(--danger); color:#fff; border:none; }
+
+    /* ====== Empty State ====== */
+    .empty{
+      text-align:center; color:var(--muted); padding:40px 16px;
+    }
+
+    /* ====== Footer link ====== */
+    .back{
+      display:inline-flex; align-items:center; gap:8px; margin-top:18px; text-decoration:none;
+      color:var(--primary); font-weight:600;
+    }
+    .back:hover{ text-decoration:underline; }
+
+    /* ====== Responsivo ====== */
+    @media (max-width: 700px){
+      .title-wrap{ flex-direction:column; align-items:flex-start; gap:6px; }
+      .toolbar{ gap:10px; }
+      .btn{ width:100%; }
+      .btn-primary{ order:2; }
+      .search{ order:1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="title-wrap">
+        <h1 class="title">Gerenciar Moradores Pendentes</h1>
+        <span class="badge-count">
+          {% if pendentes %} {{ pendentes|length }} pendente(s) {% else %} 0 pendentes {% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- Mensagens flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Card rápido com dicas -->
+    <div class="card">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:space-between;">
+        <div>
+          <strong>Aprovação necessária</strong>
+          <p class="subtitle">Usuários recém-cadastrados ficam pendentes até o síndico aprovar.</p>
+        </div>
+        <div class="toolbar">
+          <div class="search">
+            <span class="search-icon">🔎</span>
+            <input id="busca" type="text" placeholder="Buscar por nome ou e-mail..." aria-label="Buscar por nome ou e-mail">
+          </div>
+          <form method="get" action="{{ url_for('moradores_pendentes') }}">
+            <button class="btn btn-ghost" type="submit" title="Recarregar">Recarregar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela -->
+    {% if pendentes and pendentes|length > 0 %}
+      <div class="table-wrap">
+        <table id="tabela-pendentes" class="tabela-pendentes">
+          <thead>
+            <tr>
+              <th>Morador</th>
+              <th>E-mail</th>
+              <th style="width:240px;">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in pendentes %}
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar">
+                    {# iniciais: primeira letra do nome e do último sobrenome, quando existir #}
+                    {% set partes = p.nome.split() %}
+                    {% set inicial1 = partes[0][0] if partes and partes[0] else '' %}
+                    {% set inicial2 = (partes[-1][0] if partes|length > 1 else '') %}
+                    {{ (inicial1 ~ inicial2).upper() }}
+                  </div>
+                  <div class="user-meta">
+                    <div style="font-weight:600">{{ p.nome }}</div>
+                    <small>ID #{{ p.id }}</small>
+                  </div>
+                </div>
+              </td>
+              <td>{{ p.email }}</td>
+              <td>
+                <div class="actions">
+                  <form action="{{ url_for('aprovar_morador', usuario_id=p.id) }}" method="post">
+                    <button type="submit" class="btn btn-success">Aprovar</button>
+                  </form>
+                  <form action="{{ url_for('negar_morador', usuario_id=p.id) }}" method="post"
+                        onsubmit="return confirm('Tem certeza que deseja negar este cadastro?');">
+                    <button type="submit" class="btn btn-danger">Negar</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="card empty">
+        <div style="font-size:18px; font-weight:700; margin-bottom:6px;">Tudo certo por aqui</div>
+        <div>Não há cadastros pendentes no momento.</div>
+      </div>
+    {% endif %}
+
+    <p>
+      <a class="back" href="{{ url_for('dashboard') }}">← Voltar ao dashboard</a>
+    </p>
+  </div>
+
+  <script>
+    // Filtro simples por nome/email (cliente)
+    (function(){
+      const input = document.getElementById('busca');
+      const table = document.getElementById('tabela-pendentes');
+      if(!input || !table) return;
+
+      input.addEventListener('input', function(){
+        const q = this.value.trim().toLowerCase();
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+          const nome = (row.querySelector('.user-meta div')?.textContent || '').toLowerCase();
+          const email = (row.querySelector('td:nth-child(2)')?.textContent || '').toLowerCase();
+          const match = nome.includes(q) || email.includes(q);
+          row.style.display = match ? '' : 'none';
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

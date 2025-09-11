@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Condomínio Aquarela</title>
+  <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
+  <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
+  <style>
+    /* mensagens de feedback básicas */
+    .flash-container { margin-bottom: 14px; }
+    .flash { padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
+    .flash.success { background: #ecfdf5; border: 1px solid #34d399; color:#065f46; }
+    .flash.error   { background: #fef2f2; border: 1px solid #f87171; color:#7f1d1d; }
+    .flash.warning { background: #fffbeb; border: 1px solid #fbbf24; color:#7c2d12; }
+
+    .inline-msg { margin-bottom: 12px; background: #fffbeb; border: 1px solid #fbbf24; color:#7c2d12; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
+  </style>
+</head>
+<body class="auth-body">
+  <div class="auth-container">
+    <div class="auth-box">
+      <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquarela" class="auth-logo">
+      <h2>Entrar</h2>
+
+      <!-- Bloco de mensagens via flash -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-container">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <!-- Mensagem inline (se a rota passar msg= no render_template) -->
+      {% if msg %}
+        <div class="inline-msg">{{ msg }}</div>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('login') }}">
+        <input type="email" name="identificador" placeholder="E-mail" required>
+        <input type="password" name="senha" placeholder="Senha" required>
+        <button type="submit" class="auth-btn">Login</button>
+      </form>
+      <p class="auth-text">
+        Não tem conta? <a href="{{ url_for('register') }}">Cadastre-se</a>
+      </p>
+      <p class="auth-text">
+        <a href="{{ url_for('forgot_password') }}">Esqueceu sua senha?</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
