@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comunicados - Condomínio Aquarela</title>
+    <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <a href="{{ url_for('dashboard') }}" class="logo-link">
+                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo Aquarela" class="logo-img">
+            </a>
+            <nav>
+                <ul>
+                    <li><a href="{{ url_for('gerenciar_usuarios') }}">Gerenciar Usuários</a></li>
+                    <li class="active"><a href="{{ url_for('comunicados') }}">Comunicados</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <h1>Comunicados</h1>
+            </header>
+
+            <!-- Formulário para criar novo comunicado -->
+            <section class="novo-comunicado">
+                <h2>Criar Novo Comunicado</h2>
+                <form action="{{ url_for('comunicados') }}" method="POST">
+                    <div class="form-group">
+                        <label for="titulo">Título</label>
+                        <input type="text" name="titulo" id="titulo" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="conteudo">Conteúdo</label>
+                        <textarea name="conteudo" id="conteudo" class="form-control" rows="5" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Postar Comunicado</button>
+                </form>
+            </section>
+
+            <!-- Exibição de comunicados existentes -->
+            <section class="comunicados-lista">
+                <h2>Comunicados Recentes</h2>
+                {% if comunicados %}
+                    <ul class="list-group">
+                        {% for comunicado in comunicados %}
+                        <li class="list-group-item">
+                            <h5>{{ comunicado.titulo }}</h5>
+                            <p>{{ comunicado.conteudo }}</p>
+                            <small>Postado em: {{ comunicado.data_postagem.strftime('%d/%m/%Y %H:%M') }}</small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Não há comunicados no momento.</p>
+                {% endif %}
+            </section>
+        </main>
+    </div>
+</body>
+</html>
