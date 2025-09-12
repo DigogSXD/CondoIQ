@@ -7,49 +7,77 @@
 </head>
 <body>
     <div class="container">
-        <h2>Reclamações Pendentes</h2>
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <a href="{{ url_for('dashboard') }}" class="logo-link">
+                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo Aquarela" class="logo-img">
+            </a>
+            <nav>
+                <ul>
+                    <li><a href="{{ url_for('dashboard') }}">Home</a></li>
+                    <li><a href="#">Reclamações</a></li>
+                    <li><a href="{{ url_for('moradores_pendentes') }}">Moradores Pendentes</a></li>
+                </ul>
+            </nav>
+        </aside>
 
-        <!-- Mensagens de feedback -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        <main class="main-content">
+            <header class="header">
+                <h1>Reclamações Pendentes</h1>
+                <div class="user-actions">
+                    <p>Bem-vindo, {{ user.nome }}!</p>
+                    <a href="{{ url_for('logout') }}" class="nav-button">Sair</a>
+                </div>
+            </header>
 
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Título</th>
-                    <th>Descrição</th>
-                    <th>Data</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for reclamacao in reclamacoes %}
-                    <tr>
-                        <td>{{ reclamacao.titulo }}</td>
-                        <td>{{ reclamacao.descricao }}</td>
-                        <td>{{ reclamacao.data_abertura.strftime('%d/%m/%Y') }}</td>
-                        <td>
-                            <form action="{{ url_for('aprovar_reclamacao', reclamacao_id=reclamacao.id) }}" method="POST">
-                                <button type="submit" class="btn btn-success">Aprovar</button>
-                            </form>
-                            <form action="{{ url_for('negar_reclamacao', reclamacao_id=reclamacao.id) }}" method="POST">
-                                <button type="submit" class="btn btn-danger">Negar</button>
-                            </form>
-                        </td>
-                    </tr>
-                {% else %}
-                    <tr>
-                        <td colspan="4">Nenhuma reclamação pendente.</td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Voltar</a>
+            <!-- Mensagens de feedback -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container">
+                        {% for category, message in messages %}
+                            <div class="flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <section class="card">
+                <h3>Reclamações Pendentes</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Título</th>
+                            <th>Descrição</th>
+                            <th>Data</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reclamacao in reclamacoes %}
+                            <tr>
+                                <td>{{ reclamacao.titulo }}</td>
+                                <td>{{ reclamacao.descricao }}</td>
+                                <td>{{ reclamacao.data_abertura.strftime('%d/%m/%Y') }}</td>
+                                <td>
+                                    <form action="{{ url_for('aprovar_reclamacao', reclamacao_id=reclamacao.id) }}" method="POST">
+                                        <button type="submit" class="btn btn-success">Aprovar</button>
+                                    </form>
+                                    <form action="{{ url_for('negar_reclamacao', reclamacao_id=reclamacao.id) }}" method="POST">
+                                        <button type="submit" class="btn btn-danger">Negar</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="4">Nenhuma reclamação pendente.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Voltar</a>
+        </main>
     </div>
 </body>
 </html>
