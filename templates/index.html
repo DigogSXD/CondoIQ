@@ -10,6 +10,7 @@
 
     <!-- Cabeçalho -->
     <header class="bg-primary text-white text-center py-4 shadow">
+        <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquarela" class="mb-3" style="max-width: 150px;">
         <h1>Condomínio Aquarela</h1>
         <p class="mb-0">Bem-vindo ao seu espaço de convivência digital</p>
     </header>
@@ -23,10 +24,18 @@
             </p>
             
             <div class="d-grid gap-3 mt-4">
-            <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Login</a>
-            <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Cadastre-se</a>
+                <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">Login</a>
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Cadastre-se</a>
             </div>
         </div>
     </main>
 
- 
+    <!-- Rodapé -->
+    <footer class="bg-primary text-white text-center py-3">
+        <p>&copy; 2025 Condomínio Aquarela. Todos os direitos reservados.</p>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
