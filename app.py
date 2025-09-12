@@ -468,6 +468,102 @@ def dashboard():
     finally:
         session_db.close()
 
+
+# ===========================
+# Gerenciar moradores (pendentes)
+# ===========================
+from sqlalchemy.exc import IntegrityError  # se ainda não tiver importado
+
+@app.route('/moradores/pendentes', endpoint='moradores_pendentes')
+@login_required
+def _moradores_pendentes():
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        requer_sindico(usuario_ativo)
+
+        pendentes = session_db.query(Usuario).filter(
+            Usuario.condominio_id == usuario_ativo.condominio_id,
+            Usuario.tipo == TIPO_PENDENTE
+        ).all()
+
+        return render_template('gerenciar_moradores.html',
+                               user=usuario_ativo,
+                               pendentes=pendentes)
+    except Exception as e:
+        app.logger.exception(f'Erro em moradores_pendentes: {e}')
+        flash(f'Ocorreu um erro: {e}', 'error')
+        return redirect(url_for('dashboard'))
+    finally:
+        session_db.close()
+
+
+@app.route('/moradores/<int:usuario_id>/aprovar', methods=['POST'], endpoint='aprovar_morador')
+@login_required
+def _aprovar_morador(usuario_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        requer_sindico(usuario_ativo)
+
+        morador = session_db.query(Usuario).get(usuario_id)
+        if not morador or morador.condominio_id != usuario_ativo.condominio_id:
+            flash('Morador não encontrado.', 'error')
+            return redirect(url_for('moradores_pendentes'))
+
+        if morador.tipo != TIPO_PENDENTE:
+            flash('Este usuário já foi processado.', 'warning')
+            return redirect(url_for('moradores_pendentes'))
+
+        morador.tipo = TIPO_MORADOR
+        morador.is_ativo = True
+        session_db.commit()
+
+        flash('Morador aprovado com sucesso!', 'success')
+        return redirect(url_for('moradores_pendentes'))
+    except Exception as e:
+        session_db.rollback()
+        app.logger.exception(f'Erro ao aprovar morador: {e}')
+        flash(f'Erro ao aprovar: {e}', 'error')
+        return redirect(url_for('moradores_pendentes'))
+    finally:
+        session_db.close()
+
+
+@app.route('/moradores/<int:usuario_id>/negar', methods=['POST'], endpoint='negar_morador')
+@login_required
+def _negar_morador(usuario_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        requer_sindico(usuario_ativo)
+
+        morador = session_db.query(Usuario).get(usuario_id)
+        if not morador or morador.condominio_id != usuario_ativo.condominio_id:
+            flash('Morador não encontrado.', 'error')
+            return redirect(url_for('moradores_pendentes'))
+
+        if morador.tipo != TIPO_PENDENTE:
+            flash('Este usuário já foi processado.', 'warning')
+            return redirect(url_for('moradores_pendentes'))
+
+        # opção A: desativar
+        morador.is_ativo = False
+        # opção B: excluir (se preferir)
+        # session_db.delete(morador)
+
+        session_db.commit()
+
+        flash('Registro negado com sucesso.', 'success')
+        return redirect(url_for('moradores_pendentes'))
+    except Exception as e:
+        session_db.rollback()
+        app.logger.exception(f'Erro ao negar morador: {e}')
+        flash(f'Erro ao negar: {e}', 'error')
+        return redirect(url_for('moradores_pendentes'))
+    finally:
+        session_db.close()
+
 # Execução local (produção: gunicorn)
 if __name__ == '__main__':
     app.run(debug=True)
