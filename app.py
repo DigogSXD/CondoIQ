@@ -12,11 +12,10 @@ import datetime
 from smtplib import SMTPException
 
 # ============================================
-# BANCO DE DADOS (SEM DATABASE_URL)
+# BANCO DE DADOS (somente DB_*; sem DATABASE_URL)
 # ============================================
 
 def build_db_url_from_parts() -> str:
-    """Monta a URL do MySQL a partir das variáveis DB_* (todas obrigatórias)."""
     required = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
     missing = [k for k in required if not os.getenv(k)]
     if missing:
@@ -33,10 +32,9 @@ def build_db_url_from_parts() -> str:
     db_name = os.getenv("DB_NAME")
     db_ssl  = os.getenv("DB_SSL", "false").lower() == "true"
 
-    # URL-encode da senha (trata @ ? : # & / etc.)
+    # URL-encode na senha (trata @ ? : # & / etc.)
     db_pass_enc = quote_plus(db_pass)
 
-    # query string
     qs = "charset=utf8mb4"
     if db_ssl or "aivencloud.com" in (db_host or ""):
         qs += "&ssl=true"
@@ -45,7 +43,6 @@ def build_db_url_from_parts() -> str:
 
 DATABASE_URL = build_db_url_from_parts()
 
-# Para PyMySQL, para forçar TLS basta 'ssl=true' na URL; connect_args={'ssl':{}} ajuda em alguns provedores.
 _use_ssl = (
     "ssl=true" in DATABASE_URL
     or "aivencloud.com" in DATABASE_URL
@@ -55,12 +52,12 @@ _use_ssl = (
 engine = create_engine(
     DATABASE_URL,
     echo=False,
-    pool_pre_ping=True,   # reconecta se a conexão estiver quebrada
-    pool_recycle=280,     # recicla conexões (evita timeout do provedor)
+    pool_pre_ping=True,
+    pool_recycle=280,
     connect_args={'ssl': {}} if _use_ssl else {}
 )
 
-# Log de debug com senha mascarada
+# Log da URL com senha mascarada
 try:
     from sqlalchemy.engine import url as sa_url
     _parsed = sa_url.make_url(DATABASE_URL)
@@ -71,14 +68,16 @@ except Exception as e:
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
-# Associação N:M Usuario <-> Reuniao
+# ============================================
+# MODELOS
+# ============================================
+
 reuniao_participantes = Table(
     'reuniao_participantes', Base.metadata,
     Column('usuario_id', Integer, ForeignKey('usuarios.id'), primary_key=True),
     Column('reuniao_id', Integer, ForeignKey('reunioes.id'), primary_key=True)
 )
 
-# Tipos de usuário
 TIPO_SINDICO = 0
 TIPO_PENDENTE = 1
 TIPO_MORADOR = 2
@@ -97,7 +96,6 @@ class Usuario(Base):
     condominio = relationship("Condominio", back_populates="usuarios")
     reunioes = relationship("Reuniao", secondary=reuniao_participantes, back_populates="participantes")
 
-    # Métodos Flask-Login
     def is_authenticated(self): return True
     def is_active(self): return self.is_ativo
     def is_anonymous(self): return False
@@ -137,19 +135,22 @@ class Reuniao(Base):
     condominio = relationship("Condominio", back_populates="reunioes")
     participantes = relationship("Usuario", secondary=reuniao_participantes, back_populates="reunioes")
 
-def criar_tabelas():
-    Base.metadata.create_all(engine)
+# 👉 Garantir tabelas no boot (import time) – isso roda no Render com gunicorn
+try:
+    with engine.begin() as conn:
+        Base.metadata.create_all(bind=conn)
+    print("Tabelas garantidas (create_all).")
+except Exception as e:
+    print("Falha ao criar tabelas no boot:", e)
 
-# -------------------------------------------------------------
+# ============================================
 # FLASK
-# -------------------------------------------------------------
+# ============================================
+
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "troque_esta_chave_por_uma_muito_secreta")
-
-# Permitir seguir pro verify sem e-mail (somente para testes)
 ALLOW_REGISTER_WITHOUT_EMAIL = os.getenv('ALLOW_REGISTER_WITHOUT_EMAIL', 'false').lower() == 'true'
 
-# Health checks (úteis no Render)
 @app.get("/healthz")
 def healthz():
     return "ok", 200
@@ -163,7 +164,6 @@ def dbcheck():
     except Exception as e:
         return f"db fail: {e}", 500
 
-# Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -176,9 +176,10 @@ def load_user(user_id):
     finally:
         session_db.close()
 
-# -------------------------------------------------------------
+# ============================================
 # E-MAIL (SendGrid via SMTP)
-# -------------------------------------------------------------
+# ============================================
+
 app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.sendgrid.net')
 app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', '587'))
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'true').lower() == 'true'
@@ -206,16 +207,18 @@ def send_email(subject: str, recipients: list[str], body: str, html: str | None 
         app.logger.exception(f'Erro inesperado ao enviar e-mail: {e}')
         return False
 
-# -------------------------------------------------------------
+# ============================================
 # HELPERS
-# -------------------------------------------------------------
+# ============================================
+
 def requer_sindico(usuario_ativo):
     if not usuario_ativo or usuario_ativo.tipo != TIPO_SINDICO:
         abort(403)
 
-# -------------------------------------------------------------
+# ============================================
 # ROTAS
-# -------------------------------------------------------------
+# ============================================
+
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -465,9 +468,6 @@ def dashboard():
     finally:
         session_db.close()
 
-# -------------------------------------------------------------
-# Execução local (produção use gunicorn)
-# -------------------------------------------------------------
+# Execução local (produção: gunicorn)
 if __name__ == '__main__':
-    criar_tabelas()
     app.run(debug=True)
