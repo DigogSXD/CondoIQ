@@ -10,7 +10,6 @@
 
     <!-- Cabeçalho -->
     <header class="bg-primary text-white text-center py-4 shadow">
-        <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquarela" class="mb-3" style="max-width: 150px;">
         <h1>Condomínio Aquarela</h1>
         <p class="mb-0">Bem-vindo ao seu espaço de convivência digital</p>
     </header>
@@ -18,6 +17,9 @@
     <!-- Conteúdo principal -->
     <main class="flex-grow-1 d-flex justify-content-center align-items-center">
         <div class="card p-5 shadow-lg text-center" style="max-width: 500px; border-radius: 20px;">
+            <!-- Logo acima do formulário -->
+            <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquarela" class="mb-3" style="max-width: 150px;">
+            
             <h2 class="mb-3">Bem-vindo!</h2>
             <p class="text-muted">
                 Aqui você encontra informações importantes, pode acessar serviços do condomínio e ficar por dentro das novidades.
