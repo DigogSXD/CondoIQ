@@ -1,10 +1,10 @@
 import os
+from urllib.parse import quote_plus
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
-from sqlalchemy import create_engine, or_, Column, Integer, String, Date, ForeignKey, Table, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, Date, ForeignKey, Table, Boolean, text
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
-from sqlalchemy_utils import database_exists, create_database
 import bcrypt
 import re
 import secrets
@@ -12,20 +12,61 @@ import datetime
 from smtplib import SMTPException
 
 # ============================================
-# Banco de Dados e Modelos
+# BANCO DE DADOS (SEM DATABASE_URL)
 # ============================================
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "mysql+pymysql://root:12345678@localhost/CondoIQ?charset=utf8mb4"
+
+def build_db_url_from_parts() -> str:
+    """Monta a URL do MySQL a partir das variáveis DB_* (todas obrigatórias)."""
+    required = ["DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME"]
+    missing = [k for k in required if not os.getenv(k)]
+    if missing:
+        raise RuntimeError(
+            "Variáveis de banco ausentes: "
+            + ", ".join(missing)
+            + ". Defina DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME e (opcional) DB_SSL=true."
+        )
+
+    db_host = os.getenv("DB_HOST")
+    db_port = int(os.getenv("DB_PORT"))
+    db_user = os.getenv("DB_USER")
+    db_pass = os.getenv("DB_PASSWORD")
+    db_name = os.getenv("DB_NAME")
+    db_ssl  = os.getenv("DB_SSL", "false").lower() == "true"
+
+    # URL-encode da senha (trata @ ? : # & / etc.)
+    db_pass_enc = quote_plus(db_pass)
+
+    # query string
+    qs = "charset=utf8mb4"
+    if db_ssl or "aivencloud.com" in (db_host or ""):
+        qs += "&ssl=true"
+
+    return f"mysql+pymysql://{db_user}:{db_pass_enc}@{db_host}:{db_port}/{db_name}?{qs}"
+
+DATABASE_URL = build_db_url_from_parts()
+
+# Para PyMySQL, para forçar TLS basta 'ssl=true' na URL; connect_args={'ssl':{}} ajuda em alguns provedores.
+_use_ssl = (
+    "ssl=true" in DATABASE_URL
+    or "aivencloud.com" in DATABASE_URL
+    or os.getenv("DB_SSL", "false").lower() == "true"
 )
 
 engine = create_engine(
     DATABASE_URL,
     echo=False,
-    pool_pre_ping=True,      # testa a conexão antes de usar (reabre se estiver morta)
-    pool_recycle=280,        # recicla conexões ociosas (Aiven/Render derrubam após inatividade)
-    connect_args={"ssl": {"ssl_mode": "REQUIRED"}} if "aivencloud.com" in DATABASE_URL else {}
+    pool_pre_ping=True,   # reconecta se a conexão estiver quebrada
+    pool_recycle=280,     # recicla conexões (evita timeout do provedor)
+    connect_args={'ssl': {}} if _use_ssl else {}
 )
+
+# Log de debug com senha mascarada
+try:
+    from sqlalchemy.engine import url as sa_url
+    _parsed = sa_url.make_url(DATABASE_URL)
+    print("DB URL OK:", _parsed.set(password="***"))
+except Exception as e:
+    print("DATABASE_URL (montada via DB_*) inválida:", e)
 
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
@@ -41,7 +82,6 @@ reuniao_participantes = Table(
 TIPO_SINDICO = 0
 TIPO_PENDENTE = 1
 TIPO_MORADOR = 2
-
 
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -63,7 +103,6 @@ class Usuario(Base):
     def is_anonymous(self): return False
     def get_id(self): return str(self.id)
 
-
 class Condominio(Base):
     __tablename__ = "condominio"
     id = Column(Integer, primary_key=True)
@@ -78,7 +117,6 @@ class Condominio(Base):
     despesas = relationship("Despesa", back_populates="condominio")
     reunioes = relationship("Reuniao", back_populates="condominio")
 
-
 class Despesa(Base):
     __tablename__ = "despesas"
     id = Column(Integer, primary_key=True)
@@ -88,7 +126,6 @@ class Despesa(Base):
     categoria = Column(String(50), nullable=False)
     condominio_id = Column(Integer, ForeignKey("condominio.id"))
     condominio = relationship("Condominio", back_populates="despesas")
-
 
 class Reuniao(Base):
     __tablename__ = "reunioes"
@@ -100,36 +137,36 @@ class Reuniao(Base):
     condominio = relationship("Condominio", back_populates="reunioes")
     participantes = relationship("Usuario", secondary=reuniao_participantes, back_populates="reunioes")
 
-
-def criar_database_se_nao_existir():
-    # Em provedores gerenciados, não criar DB via app
-    if "localhost" in DATABASE_URL or "127.0.0.1" in DATABASE_URL:
-        if not database_exists(engine.url):
-            create_database(engine.url)
-
-
 def criar_tabelas():
     Base.metadata.create_all(engine)
 
-
 # -------------------------------------------------------------
-# Flask App
+# FLASK
+# -------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "troque_esta_chave_por_uma_muito_secreta")
 
-# Permitir seguir pro verify mesmo sem e-mail (somente para testes)
+# Permitir seguir pro verify sem e-mail (somente para testes)
 ALLOW_REGISTER_WITHOUT_EMAIL = os.getenv('ALLOW_REGISTER_WITHOUT_EMAIL', 'false').lower() == 'true'
 
-# Health check (Render Settings -> /healthz)
+# Health checks (úteis no Render)
 @app.get("/healthz")
 def healthz():
     return "ok", 200
+
+@app.get("/dbcheck")
+def dbcheck():
+    try:
+        with engine.connect() as c:
+            c.execute(text("SELECT 1"))
+        return "db ok", 200
+    except Exception as e:
+        return f"db fail: {e}", 500
 
 # Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
-
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -139,36 +176,19 @@ def load_user(user_id):
     finally:
         session_db.close()
 
-
 # -------------------------------------------------------------
-# E-mail (SendGrid SMTP via env)
+# E-MAIL (SendGrid via SMTP)
+# -------------------------------------------------------------
 app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.sendgrid.net')
 app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', '587'))
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'true').lower() == 'true'
-
-# SendGrid SMTP: MAIL_USERNAME é SEMPRE "apikey"
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'apikey')
-
-# Leia a API Key do ambiente (NÃO coloque a chave no código)
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')  # ex.: SG.xxxxx
-
-# Remetente verificado no SendGrid (Single Sender ou Domain Auth)
-app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER')  # ex.: condoiq7@gmail.com
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'apikey')   # SendGrid: SEMPRE "apikey"
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')              # API key SG.xxxxx
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER')  # remetente verificado
 
 mail = Mail(app)
 
-
 def send_email(subject: str, recipients: list[str], body: str, html: str | None = None) -> bool:
-    """
-    Envio de e-mail via Flask-Mail (SMTP do SendGrid).
-    Requer:
-      MAIL_SERVER=smtp.sendgrid.net
-      MAIL_PORT=587
-      MAIL_USE_TLS=true
-      MAIL_USERNAME=apikey
-      MAIL_PASSWORD=<SUA_API_KEY>
-      MAIL_DEFAULT_SENDER=<remetente verificado>
-    """
     if not app.config.get('MAIL_USERNAME') or not app.config.get('MAIL_PASSWORD') or not app.config.get('MAIL_DEFAULT_SENDER'):
         app.logger.error('Config SMTP incompleta: verifique MAIL_USERNAME/MAIL_PASSWORD/MAIL_DEFAULT_SENDER.')
         return False
@@ -186,20 +206,19 @@ def send_email(subject: str, recipients: list[str], body: str, html: str | None 
         app.logger.exception(f'Erro inesperado ao enviar e-mail: {e}')
         return False
 
-
 # -------------------------------------------------------------
-# Helpers
+# HELPERS
+# -------------------------------------------------------------
 def requer_sindico(usuario_ativo):
     if not usuario_ativo or usuario_ativo.tipo != TIPO_SINDICO:
         abort(403)
 
-
 # -------------------------------------------------------------
-# Rotas
+# ROTAS
+# -------------------------------------------------------------
 @app.route('/')
 def home():
     return render_template('index.html')
-
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -225,8 +244,7 @@ def register():
                     flash('Email já cadastrado!', 'error')
                     return redirect(url_for('register'))
 
-                # Código de verificação e envio
-                verification_code = secrets.token_hex(3)  # 6 chars hex
+                verification_code = secrets.token_hex(3)  # 6 chars
                 session['verification_code'] = verification_code
                 session['pending_registration'] = {'nome': nome, 'email': email, 'senha': senha}
 
@@ -250,16 +268,13 @@ def register():
                 return redirect(url_for('register', step='verify'))
 
             else:
-                # Verificação do código
                 if not codigo or codigo != session.get('verification_code'):
                     flash('Código de verificação inválido!', 'error')
                     return redirect(url_for('register', step='verify'))
 
-                # Registro final
                 hashed_senha = bcrypt.hashpw(session['pending_registration']['senha'].encode('utf-8'), bcrypt.gensalt())
                 condominio_existente = session_db.query(Condominio).first()
                 if not condominio_existente:
-                    # Primeiro usuário vira síndico e cria condomínio
                     novo_usuario = Usuario(
                         nome=session['pending_registration']['nome'],
                         email=session['pending_registration']['email'],
@@ -274,7 +289,6 @@ def register():
                     session_db.add(condominio_inicial)
                     novo_usuario.condominio = condominio_inicial
                 else:
-                    # Demais usuários entram como PENDENTE
                     novo_usuario = Usuario(
                         nome=session['pending_registration']['nome'],
                         email=session['pending_registration']['email'],
@@ -286,7 +300,6 @@ def register():
                 session_db.add(novo_usuario)
                 session_db.commit()
 
-                # Limpar sessão do fluxo
                 session.pop('verification_code', None)
                 session.pop('pending_registration', None)
                 session.pop('show_verification_code', None)
@@ -306,7 +319,6 @@ def register():
         return render_template('verify.html')
     return render_template('register.html')
 
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -315,31 +327,22 @@ def login():
         session_db = Session()
         try:
             usuario = session_db.query(Usuario).filter_by(email=identificador).first()
-
-            # Credenciais
             if not usuario or not bcrypt.checkpw(senha.encode('utf-8'), usuario.senha.encode('utf-8')):
                 flash('Credenciais inválidas!', 'error')
                 return redirect(url_for('login'))
-
-            # Ativação
             if not usuario.is_ativo:
                 flash('Sua conta está desativada. Contate o síndico.', 'error')
                 return redirect(url_for('login'))
-
-            # Pendente
             if usuario.tipo == TIPO_PENDENTE:
                 flash('Seu cadastro foi realizado, mas o síndico precisa aprovar antes de você acessar o sistema.', 'warning')
                 return redirect(url_for('login'))
 
-            # OK
             login_user(usuario)
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('dashboard'))
         finally:
             session_db.close()
-
     return render_template('login.html')
-
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
@@ -405,7 +408,6 @@ def forgot_password():
                 usuario.senha = hashed_senha.decode('utf-8')
                 session_db.commit()
 
-                # Limpar sessão do fluxo
                 session.pop('reset_code', None)
                 session.pop('reset_email', None)
                 session.pop('show_reset_code', None)
@@ -423,14 +425,12 @@ def forgot_password():
 
     return render_template('forgot_password.html', step=step)
 
-
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     flash('Você saiu da sua conta.', 'success')
     return redirect(url_for('home'))
-
 
 @app.route('/dashboard')
 @login_required
@@ -465,11 +465,9 @@ def dashboard():
     finally:
         session_db.close()
 
-
 # -------------------------------------------------------------
-# Execução local (em produção use gunicorn)
+# Execução local (produção use gunicorn)
 # -------------------------------------------------------------
 if __name__ == '__main__':
-    criar_database_se_nao_existir()
     criar_tabelas()
     app.run(debug=True)
