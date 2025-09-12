@@ -93,13 +93,14 @@ class Usuario(Base):
     verification_code = Column(String(10), nullable=True)
     is_ativo = Column(Boolean, default=True, nullable=False)
 
-    condominio = relationship("Condominio", back_populates="usuarios")
+    condominio = relationship("Condominio", back_populates="usuarios", lazy='select')  # 'select' para carregamento otimizado
     reunioes = relationship("Reuniao", secondary=reuniao_participantes, back_populates="participantes")
 
     def is_authenticated(self): return True
     def is_active(self): return self.is_ativo
     def is_anonymous(self): return False
     def get_id(self): return str(self.id)
+
 
 class Reclamacao(Base):
     __tablename__ = "reclamacoes"
@@ -641,9 +642,9 @@ def gerenciar_usuarios():
         flash('Acesso restrito.', 'error')
         return redirect(url_for('dashboard'))
 
-    session_db = Session()
+    session_db = Session()  # Abre uma nova sessão
     try:
-        # Obtendo todos os usuários do condomínio
+        # Certifique-se de carregar todos os dados de forma explícita
         usuarios = session_db.query(Usuario).filter(Usuario.condominio_id == current_user.condominio.id).all()
 
         if request.method == 'POST':
@@ -657,14 +658,13 @@ def gerenciar_usuarios():
 
             if acao == 'ativar':
                 usuario.is_ativo = True
-                flash(f'Usuário {usuario.nome} ativado com sucesso!', 'success')
             elif acao == 'desativar':
                 usuario.is_ativo = False
-                flash(f'Usuário {usuario.nome} desativado com sucesso!', 'success')
             else:
                 flash('Ação inválida!', 'error')
 
             session_db.commit()
+            flash(f'Usuário {usuario.nome} {"ativado" if usuario.is_ativo else "desativado"} com sucesso!', 'success')
             return redirect(url_for('gerenciar_usuarios'))
 
         return render_template('gerenciar_usuarios.html', usuarios=usuarios)
@@ -676,7 +676,6 @@ def gerenciar_usuarios():
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
-
 
 
 
