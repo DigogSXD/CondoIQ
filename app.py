@@ -101,6 +101,20 @@ class Usuario(Base):
     def is_anonymous(self): return False
     def get_id(self): return str(self.id)
 
+class Reclamacao(Base):
+    __tablename__ = "reclamacoes"
+    id = Column(Integer, primary_key=True)
+    titulo = Column(String(150), nullable=False)
+    descricao = Column(String(500), nullable=False)
+    data_abertura = Column(Date, default=datetime.date.today)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    usuario = relationship("Usuario", back_populates="reclamacoes")
+    status = Column(String(50), default="Pendente")
+
+# Adiciona relação de usuário com as reclamações
+Usuario.reclamacoes = relationship("Reclamacao", back_populates="usuario")
+
+
 class Condominio(Base):
     __tablename__ = "condominio"
     id = Column(Integer, primary_key=True)
@@ -566,6 +580,112 @@ def _negar_morador(usuario_id):
     finally:
         session_db.close()
 
+
+@app.route('/abrir_reclamacao', methods=['GET', 'POST'])
+@login_required
+def abrir_reclamacao():
+    if request.method == 'POST':
+        titulo = request.form.get('titulo')
+        descricao = request.form.get('descricao')
+
+        # Verifica se os campos são preenchidos
+        if not titulo or not descricao:
+            flash('Todos os campos são obrigatórios!', 'error')
+            return redirect(url_for('abrir_reclamacao'))
+
+        try:
+            session_db = Session()
+            reclamacao = Reclamacao(titulo=titulo, descricao=descricao, usuario_id=current_user.id)
+            session_db.add(reclamacao)
+            session_db.commit()
+            flash('Reclamação enviada com sucesso!', 'success')
+            return redirect(url_for('dashboard'))
+        except Exception as e:
+            session_db.rollback()
+            app.logger.exception(f'Erro ao criar reclamação: {e}')
+            flash('Erro ao abrir reclamação. Tente novamente.', 'error')
+            return redirect(url_for('abrir_reclamacao'))
+        finally:
+            session_db.close()
+
+    return render_template('abrir_reclamacao.html')
+
+
+@app.route('/reclamacoes', methods=['GET'])
+@login_required
+def visualizar_reclamacoes():
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        requer_sindico(usuario_ativo)
+
+        reclamacoes = session_db.query(Reclamacao).filter(Reclamacao.status == 'Pendente').all()
+
+        return render_template('reclamacoes.html', reclamacoes=reclamacoes)
+    except Exception as e:
+        app.logger.exception(f'Erro em visualizar_reclamacoes: {e}')
+        flash(f'Ocorreu um erro: {e}', 'error')
+        return redirect(url_for('dashboard'))
+    finally:
+        session_db.close()
+
+
+@app.route('/reclamacoes/<int:reclamacao_id>/aprovar', methods=['POST'])
+@login_required
+def aprovar_reclamacao(reclamacao_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        requer_sindico(usuario_ativo)
+
+        reclamacao = session_db.query(Reclamacao).get(reclamacao_id)
+        if not reclamacao:
+            flash('Reclamação não encontrada.', 'error')
+            return redirect(url_for('visualizar_reclamacoes'))
+
+        reclamacao.status = 'Aprovada'
+        session_db.commit()
+
+        flash('Reclamação aprovada com sucesso!', 'success')
+        return redirect(url_for('visualizar_reclamacoes'))
+    except Exception as e:
+        session_db.rollback()
+        app.logger.exception(f'Erro ao aprovar reclamação: {e}')
+        flash(f'Erro ao aprovar: {e}', 'error')
+        return redirect(url_for('visualizar_reclamacoes'))
+    finally:
+        session_db.close()
+
+
+@app.route('/reclamacoes/<int:reclamacao_id>/negar', methods=['POST'])
+@login_required
+def negar_reclamacao(reclamacao_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        requer_sindico(usuario_ativo)
+
+        reclamacao = session_db.query(Reclamacao).get(reclamacao_id)
+        if not reclamacao:
+            flash('Reclamação não encontrada.', 'error')
+            return redirect(url_for('visualizar_reclamacoes'))
+
+        reclamacao.status = 'Negada'
+        session_db.commit()
+
+        flash('Reclamação negada com sucesso.', 'success')
+        return redirect(url_for('visualizar_reclamacoes'))
+    except Exception as e:
+        session_db.rollback()
+        app.logger.exception(f'Erro ao negar reclamação: {e}')
+        flash(f'Erro ao negar: {e}', 'error')
+        return redirect(url_for('visualizar_reclamacoes'))
+    finally:
+        session_db.close()
+
+
+
 # Execução local (produção: gunicorn)
 if __name__ == '__main__':
     app.run(debug=True)
+
