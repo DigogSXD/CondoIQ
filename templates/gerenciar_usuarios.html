@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciar Usuários - Condomínio Aquarela</title>
+    <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <a href="{{ url_for('dashboard') }}" class="logo-link">
+                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo Aquarela" class="logo-img">
+            </a>
+            <nav>
+                <ul>
+                    <li class="active"><a href="{{ url_for('gerenciar_usuarios') }}">Gerenciar Usuários</a></li>
+                    <li><a href="{{ url_for('comunicados') }}">Comunicados</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <h1>Gerenciar Usuários</h1>
+            </header>
+
+            <section class="usuarios-list">
+                <h2>Usuários Cadastrados</h2>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usuario in usuarios %}
+                        <tr>
+                            <td>{{ usuario.nome }}</td>
+                            <td>{{ usuario.email }}</td>
+                            <td>
+                                {% if usuario.is_ativo %}
+                                    <span class="badge badge-success">Ativo</span>
+                                {% else %}
+                                    <span class="badge badge-danger">Desativado</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form action="{{ url_for('gerenciar_usuarios') }}" method="POST" style="display:inline;">
+                                    <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                    <button type="submit" name="acao" value="ativar" class="btn btn-success" {% if usuario.is_ativo %}disabled{% endif %}>Ativar</button>
+                                    <button type="submit" name="acao" value="desativar" class="btn btn-danger" {% if not usuario.is_ativo %}disabled{% endif %}>Desativar</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center">Nenhum usuário encontrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+</body>
+</html>
