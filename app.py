@@ -647,7 +647,7 @@ def gerenciar_usuarios():
     session_db = Session()  # Abre uma nova sessão
     try:
         # Filtra os usuários do condomínio, incluindo os desativados
-        usuarios = session_db.query(Usuario).filter(Usuario.condominio_id == current_user.condominio.id).all()
+        usuarios = session_db.query(Usuario).filter(Usuario.condominio_id == current_user.condominio_id).all()
 
         if request.method == 'POST':
             usuario_id = request.form.get('usuario_id')
