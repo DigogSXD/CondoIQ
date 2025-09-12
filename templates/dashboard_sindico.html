@@ -8,17 +8,16 @@
 </head>
 <body>
     <div class="container">
-        <!-- Sidebar -->
         <aside class="sidebar">
             <a href="{{ url_for('dashboard') }}" class="logo-link">
-                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo Aquarela" class="logo-img">
+                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo CondoIQ" class="logo-img">
             </a>
             <nav>
                 <ul>
                     <li class="active"><a href="{{ url_for('dashboard') }}">Home</a></li>
-                    <li><a href="#">Reclamações</a></li>
+                    <li><a href="#">Finanças</a></li>
                     <li><a href="#">Agenda</a></li>
-                    <li><a href="#">Despesas</a></li>
+                    <li><a href="#">Manutenção</a></li>
                     <li><a href="{{ url_for('moradores_pendentes') }}">Moradores</a></li>
                 </ul>
             </nav>
@@ -29,9 +28,20 @@
                 <h1>Painel do Síndico</h1>
                 <div class="user-actions">
                     <p>Bem-vindo, {{ user.nome }}!</p>
-                    <a href="{{ url_for('logout') }}" class="nav-button">Sair</a>
+                    <a href="{{ url_for('logout') }}">Sair</a>
                 </div>
             </header>
+
+            <!-- Mensagens flash -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <div class="flash-container">
+                  {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
 
             <section class="cards">
                 <div class="card">
@@ -43,8 +53,9 @@
                 <div class="card">
                     <h3>Reuniões Agendadas</h3>
                     {% if reunioes and reunioes|length > 0 %}
+                        {% set reunioes_ordenadas = reunioes|sort(attribute='data') %}
                         <p>{{ reunioes|length }} reunião(ões)</p>
-                        <small>Última: {{ reunioes[-1].data.strftime('%d/%m/%Y') }}</small>
+                        <small>Última: {{ reunioes_ordenadas[-1].data.strftime('%d/%m/%Y') }}</small>
                     {% else %}
                         <p>Nenhuma reunião</p>
                     {% endif %}
@@ -52,9 +63,10 @@
 
                 <div class="card">
                     <h3>Despesas Registradas</h3>
-                    {% if despesas %}
+                    {% if despesas and despesas|length > 0 %}
+                        {% set despesas_ordenadas = despesas|sort(attribute='data') %}
                         <p>{{ despesas|length }} despesa(s)</p>
-                        <small>Última: {{ despesas[-1].data.strftime('%d/%m/%Y') }}</small>
+                        <small>Última: {{ despesas_ordenadas[-1].data.strftime('%d/%m/%Y') }}</small>
                     {% else %}
                         <p>Nenhuma despesa</p>
                     {% endif %}
@@ -77,15 +89,16 @@
 
             <section class="comunicados">
                 <h2>Comunicados Recentes</h2>
-                {% if reunioes %}
-                    {% for reuniao in reunioes %}
+                {% if reunioes and reunioes|length > 0 %}
+                    {% set reunioes_desc = reunioes|sort(attribute='data', reverse=true) %}
+                    {% for reuniao in reunioes_desc %}
                         <div class="comunicado">
                             <p><strong>Reunião:</strong> {{ reuniao.titulo }}</p>
                             <small>Data: {{ reuniao.data.strftime('%d/%m/%Y') }}</small>
                         </div>
                     {% endfor %}
                 {% else %}
-                    <p>Ainda não há comunicados.</p>
+                    <p>Ainda não há anúncios.</p>
                 {% endif %}
             </section>
         </main>

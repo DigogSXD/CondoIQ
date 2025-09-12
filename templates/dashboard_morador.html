@@ -15,8 +15,8 @@
             <nav>
                 <ul>
                     <li class="active"><a href="#">Home</a></li>
+                    <li><a href="#">Finanças</a></li>
                     <li><a href="#">Agenda</a></li>
-                    <li><a href="#">Comunicados</a></li>
                 </ul>
             </nav>
         </aside>
@@ -26,15 +26,15 @@
                 <h1>Painel do Morador</h1>
                 <div class="user-actions">
                     <p>Bem-vindo, {{ user.nome }}!</p>
-                    <a href="{{ url_for('logout') }}" class="nav-button">Sair</a>
+                    <a href="{{ url_for('logout') }}">Sair</a>
                 </div>
             </header>
 
             <section class="info-condominio">
                 <h2>Informações do Condomínio</h2>
-                <p><strong>Nome:</strong> {{ condominio.nome }}</p>
-                <p><strong>Endereço:</strong> {{ condominio.endereco }}</p>
-                <p><strong>Email:</strong> {{ condominio.email }}</p>
+                <p>Você está no condomínio **{{ condominio.nome }}**</p>
+                <p>Endereço: {{ condominio.endereco }}</p>
+                <p>Email: {{ condominio.email }}</p>
             </section>
 
             <section class="anuncios">
@@ -55,6 +55,7 @@
             <section class="acoes">
                 <h2>Ações Rápidas</h2>
                 <ul>
+                    <li><a href="#">Gerenciar Documentos</a></li>
                     <li><a href="#">Reservar Área Comum</a></li>
                     <li><a href="#">Relatar Problema</a></li>
                 </ul>
