@@ -1,70 +1,263 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>CondoIQ - Dashboard Morador</title>
-    <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <aside class="sidebar">
-            <a href="{{ url_for('dashboard') }}" class="logo-link">
-                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo Aquarela" class="logo-img">
-            </a>
-            <nav>
-                <ul>
-                    <li class="active"><a href="#">Home</a></li>
-                    <li><a href="#">Finanças</a></li>
-                    <li><a href="#">Agenda</a></li>
-                    <li><a href="{{ url_for('visualizar_reclamacoes') }}">Reclamações</a></li> <!-- Link para visualizar reclamações -->
-                    <li><a href="{{ url_for('comunicados') }}">Comunicados</a></li> <!-- Link para comunicados -->
-                    <li><a href="{{ url_for('abrir_reclamacao') }}">Abrir Reclamação</a></li> <!-- Link para abrir nova reclamação -->
-                </ul>
+{% extends "base.html" %}
 
-            </nav>
-        </aside>
+{% block title %}Dashboard do Morador{% endblock %}
 
-        <main class="main-content">
-            <header class="header">
-                <h1>Painel do Morador</h1>
-                <div class="user-actions">
-                    <p>Bem-vindo, {{ user.nome }}!</p>
-                    <a href="{{ url_for('logout') }}">Sair</a>
-                </div>
-            </header>
+{% block content %}
+    <div class="page">
+        <div class="header">
+            <div class="title-wrap">
+                <h1 class="title">Painel do Morador</h1>
+            </div>
+        </div>
 
-            <section class="info-condominio">
-                <h2>Informações do Condomínio</h2>
-                <p>Você está no condomínio **{{ condominio.nome }}**</p>
-                <p>Endereço: {{ condominio.endereco }}</p>
-                <p>Email: {{ condominio.email }}</p>
-            </section>
-
-            <section class="anuncios">
-                <h2>Reuniões Agendadas</h2>
-                {% if reunioes %}
-                    {% for reuniao in reunioes %}
-                        <div class="comunicado">
-                            <p><strong>{{ reuniao.titulo }}</strong></p>
-                            <small>Data: {{ reuniao.data.strftime('%d/%m/%Y') }}</small>
-                            <small>Local: {{ reuniao.local }}</small>
-                        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-container">
+                    {% for category, message in messages %}
+                        <div class="flash {{ category }}">{{ message }}</div>
                     {% endfor %}
-                {% else %}
-                    <p>Você não foi convidado para nenhuma reunião.</p>
-                {% endif %}
-            </section>
+                </div>
+            {% endif %}
+        {% endwith %}
 
-            <section class="acoes">
-                <h2>Ações Rápidas</h2>
-                <ul>
-                    <li><a href="#">Gerenciar Documentos</a></li>
-                    <li><a href="#">Reservar Área Comum</a></li>
-                    <li><a href="#">Relatar Problema</a></li>
-                </ul>
-            </section>
-        </main>
+        <section class="info-condominio">
+            <h2>Informações do Condomínio</h2>
+            <div class="card">
+                <div class="info-item">
+                    <strong>Nome:</strong> <span>{{ condominio.nome }}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Endereço:</strong> <span>{{ condominio.endereco }}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Email:</strong> <span>{{ condominio.email if condominio.email else '—' }}</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="comunicados">
+            <h2>Comunicados Recentes</h2>
+            {% if comunicados %}
+                {% for comunicado in comunicados %}
+                    <div class="comunicado card">
+                        <p><strong>{{ comunicado.titulo }}</strong></p>
+                        <p>{{ comunicado.conteudo }}</p>
+                        <small>Publicado em: {{ comunicado.data_postagem.strftime('%d/%m/%Y') }}</small>
+                    </div>
+                {% endfor %}
+                <a href="{{ url_for('comunicados') }}" class="btn btn-primary">Ver Todos os Comunicados</a>
+            {% else %}
+                <div class="card empty">
+                    <div style="font-size:18px; font-weight:700; margin-bottom:6px;">Nenhum comunicado</div>
+                    <div>Ainda não há comunicados publicados.</div>
+                </div>
+            {% endif %}
+        </section>
+
+        <section class="reunioes">
+            <h2>Reuniões Agendadas</h2>
+            {% if reunioes %}
+                {% for reuniao in reunioes %}
+                    <div class="reuniao card">
+                        <p><strong>{{ reuniao.titulo }}</strong></p>
+                        <p><small>Data: {{ reuniao.data.strftime('%d/%m/%Y') }}</small></p>
+                        <p><small>Local: {{ reuniao.local }}</small></p>
+                        {% if reuniao.meet_link %}
+                            <p><small>Link: <a href="{{ reuniao.meet_link }}" target="_blank" class="link">Entrar na Reunião</a></small></p>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="card empty">
+                    <div style="font-size:18px; font-weight:700; margin-bottom:6px;">Nenhuma reunião</div>
+                    <div>Você não foi convidado para nenhuma reunião.</div>
+                </div>
+            {% endif %}
+        </section>
+
+        <section class="acoes">
+            <h2>Ações Rápidas</h2>
+            <div class="cards">
+                <div class="card">
+                    <h3>Abrir Reclamação</h3>
+                    <p>Registre um problema ou sugestão.</p>
+                    <a href="{{ url_for('abrir_reclamacao') }}" class="btn btn-primary">Abrir</a>
+                </div>
+                <div class="card">
+                    <h3>Minhas Reclamações</h3>
+                    <p>Consulte o status das suas reclamações.</p>
+                    <a href="{{ url_for('minhas_reclamacoes') }}" class="btn btn-primary">Ver</a>
+                </div>
+                <div class="card">
+                    <h3>Tutorias</h3>
+                    <p>Abra o portão com o celular</p>
+                    <a href="#" class="btn btn-primary">Abrir</a>
+                </div>
+            </div>
+        </section>
     </div>
-</body>
-</html>
+
+    <style>
+        /* ====== Page-Specific Styles ====== */
+        .page {
+            max-width: 1100px;
+            margin: 32px auto;
+            padding: 0 20px;
+        }
+        .title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .title {
+            font-size: clamp(22px, 3vw, 28px);
+            margin: 0;
+        }
+        .user-actions p {
+            margin: 0;
+            font-size: 14px;
+            color: var(--muted);
+        }
+        .info-condominio {
+            margin-bottom: 30px;
+        }
+        .info-condominio h2 {
+            font-size: 20px;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+        .info-item {
+            display: flex;
+            gap: 10px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--line);
+        }
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        .info-item strong {
+            flex: 0 0 100px;
+            color: var(--text);
+            font-weight: 600;
+        }
+        .info-item span {
+            flex: 1;
+            color: var(--muted);
+        }
+        .comunicados, .reunioes, .acoes {
+            margin-bottom: 30px;
+        }
+        .comunicados h2, .reunioes h2, .acoes h2 {
+            font-size: 20px;
+            margin-bottom: 16px;
+            color: var(--text);
+        }
+        .comunicado, .reuniao {
+            margin-bottom: 12px;
+            padding: 16px;
+            animation: slideIn 0.3s ease;
+        }
+        .comunicado p, .reuniao p {
+            margin: 0 0 8px;
+            color: var(--text);
+        }
+        .comunicado strong, .reuniao strong {
+            font-size: 16px;
+            color: var(--text);
+        }
+        .comunicado small, .reuniao small {
+            color: var(--muted);
+            font-size: 12px;
+            display: block;
+            margin: 4px 0;
+        }
+        .link {
+            color: var(--primary);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        .link:hover {
+            color: #3730a3;
+            text-decoration: underline;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(2,6,23,.08);
+        }
+        .card h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: var(--text);
+        }
+        .card p {
+            margin: 0 0 12px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+        .empty {
+            text-align: center;
+            color: var(--muted);
+            padding: 40px 16px;
+        }
+        .btn {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: var(--card);
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.15s ease, filter 0.15s ease;
+            box-shadow: var(--shadow);
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(0.98);
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: #0800ff;
+            border: none;
+            text-align: center;
+        }
+        .btn-primary:hover {
+            background: #ffffff;
+        }
+        .btn-ghost {
+            background: #0800ff;
+        }
+
+        /* ====== Responsivo ====== */
+        @media (max-width: 700px) {
+            .cards {
+                grid-template-columns: 1fr;
+            }
+            .info-item {
+                flex-direction: column;
+                gap: 4px;
+            }
+            .info-item strong {
+                flex: none;
+            }
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+{% endblock %}

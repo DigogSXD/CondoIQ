@@ -161,3 +161,23 @@ body {
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
+
+
+
+.btn-concluir {
+    padding: 8px 15px;
+    background: #10b981; /* Um verde para indicar conclusão */
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-concluir:hover {
+    background: #059669;
+}
+
+/* O estilo para a nova cor de status */
+.status-Concluída { background-color: #10b981; }

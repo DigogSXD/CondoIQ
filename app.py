@@ -10,9 +10,13 @@ import re
 import secrets
 import datetime
 from smtplib import SMTPException
+from dotenv import load_dotenv
+from sqlalchemy.exc import IntegrityError
+
+load_dotenv()
 
 # ============================================
-# BANCO DE DADOS (somente DB_*; sem DATABASE_URL)
+# BANCO DE DADOS (Configuração Local)
 # ============================================
 
 def build_db_url_from_parts() -> str:
@@ -93,6 +97,7 @@ class Usuario(Base):
     condominio_id = Column(Integer, ForeignKey("condominio.id"), nullable=True)
     verification_code = Column(String(10), nullable=True)
     is_ativo = Column(Boolean, default=True, nullable=False)
+    mensagens_enviadas = relationship("Mensagem", back_populates="remetente")
 
     condominio = relationship("Condominio", back_populates="usuarios", lazy='select')
     reunioes = relationship("Reuniao", secondary=reuniao_participantes, back_populates="participantes")
@@ -103,6 +108,16 @@ class Usuario(Base):
     def get_id(self): return str(self.id)
 
 
+class Mensagem(Base):
+    __tablename__ = "mensagens"
+    id = Column(Integer, primary_key=True)
+    conteudo = Column(String(500), nullable=False)
+    data_envio = Column(Date, default=datetime.date.today)
+    remetente_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    reclamacao_id = Column(Integer, ForeignKey("reclamacoes.id"), nullable=False)
+
+    remetente = relationship("Usuario", back_populates="mensagens_enviadas")
+    reclamacao = relationship("Reclamacao", back_populates="mensagens")
 
 class Reclamacao(Base):
     __tablename__ = "reclamacoes"
@@ -113,8 +128,8 @@ class Reclamacao(Base):
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     usuario = relationship("Usuario", back_populates="reclamacoes")
     status = Column(String(50), default="Pendente")
+    mensagens = relationship("Mensagem", back_populates="reclamacao", cascade="all, delete-orphan")
 
-# Adiciona relação de usuário com as reclamações
 Usuario.reclamacoes = relationship("Reclamacao", back_populates="usuario")
 
 
@@ -166,10 +181,13 @@ class Reuniao(Base):
     data = Column(Date, nullable=False)
     local = Column(String(255), nullable=False)
     condominio_id = Column(Integer, ForeignKey("condominio.id"))
+    # Adicione esta nova coluna para o link do Meet:
+    meet_link = Column(String(255), nullable=True) 
+    # Mantenha as outras linhas
     condominio = relationship("Condominio", back_populates="reunioes")
     participantes = relationship("Usuario", secondary=reuniao_participantes, back_populates="reunioes")
 
-# 👉 Garantir tabelas no boot (import time) – isso roda no Render com gunicorn
+# Garantir tabelas no boot
 try:
     with engine.begin() as conn:
         Base.metadata.create_all(bind=conn)
@@ -183,7 +201,7 @@ except Exception as e:
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "troque_esta_chave_por_uma_muito_secreta")
-ALLOW_REGISTER_WITHOUT_EMAIL = os.getenv('ALLOW_REGISTER_WITHOUT_EMAIL', 'false').lower() == 'true'
+ALLOW_REGISTER_WITHOUT_EMAIL = os.getenv('ALLOW_REGISTER_WITHOUT_EMAIL', 'true').lower() == 'true'
 
 @app.get("/healthz")
 def healthz():
@@ -211,7 +229,7 @@ def load_user(user_id):
         session_db.close()
 
 # ============================================
-# E-MAIL (SendGrid via SMTP)
+# E-MAIL (Configuração Local)
 # ============================================
 
 app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.sendgrid.net')
@@ -281,7 +299,7 @@ def register():
                     flash('Email já cadastrado!', 'error')
                     return redirect(url_for('register'))
 
-                verification_code = secrets.token_hex(3)  # 6 chars
+                verification_code = secrets.token_hex(3)
                 session['verification_code'] = verification_code
                 session['pending_registration'] = {'nome': nome, 'email': email, 'senha': senha}
 
@@ -320,7 +338,7 @@ def register():
                     )
                     condominio_inicial = Condominio(
                         nome="Aquarela",
-                        endereco="Rua 06 chácara",
+                        endereco="Rua 06 chácara 244",
                         status="ativo",
                         cnpj="04341404000108",
                         email="AquarelaCondoIQ@gmail.com"
@@ -403,7 +421,8 @@ def forgot_password():
                 enviado = send_email(
                     'Código de Redefinição de Senha - CondoIQ',
                     [email],
-                    f'Seu código de redefinição de senha é: {reset_code}'
+                    f'Seu código de redefinição de senha é: {reset_code}',
+                    f'Seu código de redefinição de senha é: <b>{reset_code}</b>'
                 )
 
                 if not enviado and not ALLOW_REGISTER_WITHOUT_EMAIL:
@@ -471,12 +490,13 @@ def logout():
     flash('Você saiu da sua conta.', 'success')
     return redirect(url_for('home'))
 
+# No app.py, na rota /dashboard:
 @app.route('/dashboard')
 @login_required
 def dashboard():
     session_db = Session()
     try:
-        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        usuario_ativo = session_db.get(Usuario, current_user.id)
         if not usuario_ativo or not usuario_ativo.condominio:
             return render_template('no_condominio.html', user=usuario_ativo)
 
@@ -486,18 +506,24 @@ def dashboard():
             despesas_condominio = session_db.query(Despesa).filter_by(condominio_id=condominio.id).all()
             reunioes_condominio = session_db.query(Reuniao).filter_by(condominio_id=condominio.id).all()
             moradores_condominio = session_db.query(Usuario).filter(Usuario.condominio_id == condominio.id).count()
+            comunicados_condominio = session_db.query(Comunicado).filter_by(condominio_id=condominio.id).order_by(Comunicado.data_postagem.desc()).all()
+            
             return render_template('dashboard_sindico.html',
                                    condominio=condominio,
                                    user=usuario_ativo,
                                    despesas=despesas_condominio,
                                    reunioes=reunioes_condominio,
-                                   moradores=moradores_condominio)
+                                   moradores=moradores_condominio,
+                                   comunicados=comunicados_condominio)
         else:
             reunioes_morador = usuario_ativo.reunioes
+            comunicados_condominio = session_db.query(Comunicado).filter_by(condominio_id=usuario_ativo.condominio_id).order_by(Comunicado.data_postagem.desc()).all()
+            
             return render_template('dashboard_morador.html',
                                    condominio=condominio,
                                    user=usuario_ativo,
-                                   reunioes=reunioes_morador)
+                                   reunioes=reunioes_morador,
+                                   comunicados=comunicados_condominio)
     except Exception as e:
         flash(f'Ocorreu um erro: {e}', 'error')
         return redirect(url_for('home'))
@@ -508,14 +534,14 @@ def dashboard():
 # ===========================
 # Gerenciar moradores (pendentes)
 # ===========================
-from sqlalchemy.exc import IntegrityError  # se ainda não tiver importado
+from sqlalchemy.exc import IntegrityError
 
 @app.route('/moradores/pendentes', endpoint='moradores_pendentes')
 @login_required
 def _moradores_pendentes():
     session_db = Session()
     try:
-        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        usuario_ativo = session_db.get(Usuario, current_user.id)
         requer_sindico(usuario_ativo)
 
         pendentes = session_db.query(Usuario).filter(
@@ -534,12 +560,44 @@ def _moradores_pendentes():
         session_db.close()
 
 
+@app.route('/moradores/<int:usuario_id>/negar', methods=['POST'], endpoint='negar_morador')
+@login_required
+def _negar_morador(usuario_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+
+        morador = session_db.query(Usuario).get(usuario_id)
+        if not morador or morador.condominio_id != usuario_ativo.condominio_id:
+            flash('Morador não encontrado.', 'error')
+            return redirect(url_for('moradores_pendentes'))
+
+        if morador.tipo != TIPO_PENDENTE:
+            flash('Este usuário já foi processado.', 'warning')
+            return redirect(url_for('moradores_pendentes'))
+
+        morador.is_ativo = False
+        session_db.commit()
+
+        flash('Registro negado com sucesso.', 'success')
+        return redirect(url_for('moradores_pendentes'))
+    except Exception as e:
+        session_db.rollback()
+        app.logger.exception(f'Erro ao negar morador: {e}')
+        flash(f'Erro ao negar: {e}', 'error')
+        return redirect(url_for('moradores_pendentes'))
+    finally:
+        session_db.close()
+
+
+
 @app.route('/moradores/<int:usuario_id>/aprovar', methods=['POST'], endpoint='aprovar_morador')
 @login_required
 def _aprovar_morador(usuario_id):
     session_db = Session()
     try:
-        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        usuario_ativo = session_db.get(Usuario, current_user.id)
         requer_sindico(usuario_ativo)
 
         morador = session_db.query(Usuario).get(usuario_id)
@@ -566,77 +624,6 @@ def _aprovar_morador(usuario_id):
         session_db.close()
 
 
-@app.route('/moradores/<int:usuario_id>/negar', methods=['POST'], endpoint='negar_morador')
-@login_required
-def _negar_morador(usuario_id):
-    session_db = Session()
-    try:
-        usuario_ativo = session_db.query(Usuario).get(current_user.id)
-        requer_sindico(usuario_ativo)
-
-        morador = session_db.query(Usuario).get(usuario_id)
-        if not morador or morador.condominio_id != usuario_ativo.condominio_id:
-            flash('Morador não encontrado.', 'error')
-            return redirect(url_for('moradores_pendentes'))
-
-        if morador.tipo != TIPO_PENDENTE:
-            flash('Este usuário já foi processado.', 'warning')
-            return redirect(url_for('moradores_pendentes'))
-
-        # opção A: desativar
-        morador.is_ativo = False
-        # opção B: excluir (se preferir)
-        # session_db.delete(morador)
-
-        session_db.commit()
-
-        flash('Registro negado com sucesso.', 'success')
-        return redirect(url_for('moradores_pendentes'))
-    except Exception as e:
-        session_db.rollback()
-        app.logger.exception(f'Erro ao negar morador: {e}')
-        flash(f'Erro ao negar: {e}', 'error')
-        return redirect(url_for('moradores_pendentes'))
-    finally:
-        session_db.close()
-
-
-@app.route('/comunicados', methods=['GET', 'POST'])
-@login_required
-def comunicados():
-    if current_user.tipo != TIPO_SINDICO:
-        flash('Acesso restrito.', 'error')
-        return redirect(url_for('dashboard'))
-
-    session_db = Session()
-    try:
-        if request.method == 'POST':
-            titulo = request.form.get('titulo')
-            conteudo = request.form.get('conteudo')
-
-            if not titulo or not conteudo:
-                flash('Todos os campos são obrigatórios!', 'error')
-                return redirect(url_for('comunicados'))
-
-            comunicado = Comunicado(titulo=titulo, conteudo=conteudo, usuario_id=current_user.id, condominio_id=current_user.condominio.id)
-            session_db.add(comunicado)
-            session_db.commit()
-
-            flash('Comunicado postado com sucesso!', 'success')
-            return redirect(url_for('comunicados'))
-
-        comunicados = session_db.query(Comunicado).filter(Comunicado.condominio_id == current_user.condominio.id).order_by(Comunicado.data_postagem.desc()).all()
-
-        return render_template('comunicados.html', comunicados=comunicados)
-
-    except Exception as e:
-        session_db.rollback()
-        app.logger.exception(f'Erro ao postar comunicado: {e}')
-        flash('Erro ao postar comunicado. Tente novamente.', 'error')
-        return redirect(url_for('dashboard'))
-    finally:
-        session_db.close()
-
 # ============================================
 # Gerenciar usuários (Ativos e Desativados)
 # ============================================
@@ -644,23 +631,19 @@ def comunicados():
 @app.route('/usuarios/gerenciar', methods=['GET', 'POST'])
 @login_required
 def gerenciar_usuarios():
-    # Verifica se o usuário logado é síndico
     if current_user.tipo != TIPO_SINDICO:
         flash('Acesso restrito.', 'error')
         return redirect(url_for('dashboard'))
 
     session_db = Session()
     try:
-        # Pega o objeto do usuário atual em uma nova sessão para garantir que as relações estejam disponíveis
-        usuario_ativo_db = session_db.query(Usuario).get(current_user.id)
+        usuario_ativo_db = session_db.get(Usuario, current_user.id)
         
-        # Filtra todos os usuários do condomínio, excluindo o síndico
         usuarios_condominio = session_db.query(Usuario).filter(
             Usuario.condominio_id == usuario_ativo_db.condominio_id,
             Usuario.tipo != TIPO_SINDICO
         ).all()
         
-        # Lógica para ativar/desativar usuários via POST
         if request.method == 'POST':
             usuario_id = request.form.get('usuario_id')
             acao = request.form.get('acao')
@@ -671,8 +654,7 @@ def gerenciar_usuarios():
                 return redirect(url_for('gerenciar_usuarios'))
 
             if acao == 'ativar':
-                # Garante que o usuário desativado volte a ser um morador
-                if usuario.tipo == TIPO_DESATIVADO:
+                if usuario.tipo == TIPO_DESATIVADO or usuario.tipo == TIPO_PENDENTE:
                     usuario.tipo = TIPO_MORADOR
                 usuario.is_ativo = True
                 flash(f'Usuário {usuario.nome} ativado com sucesso!', 'success')
@@ -686,7 +668,6 @@ def gerenciar_usuarios():
             session_db.commit()
             return redirect(url_for('gerenciar_usuarios'))
 
-        # Renderiza a página com a lista de usuários para a visualização GET
         return render_template('gerenciar_usuarios.html', usuarios=usuarios_condominio)
 
     except Exception as e:
@@ -698,12 +679,6 @@ def gerenciar_usuarios():
 
 
 
-
-
-
-
-
-
 @app.route('/abrir_reclamacao', methods=['GET', 'POST'])
 @login_required
 def abrir_reclamacao():
@@ -711,18 +686,28 @@ def abrir_reclamacao():
         titulo = request.form.get('titulo')
         descricao = request.form.get('descricao')
 
-        # Verifica se os campos são preenchidos
         if not titulo or not descricao:
             flash('Todos os campos são obrigatórios!', 'error')
             return redirect(url_for('abrir_reclamacao'))
 
         try:
             session_db = Session()
+            # Cria a reclamação
             reclamacao = Reclamacao(titulo=titulo, descricao=descricao, usuario_id=current_user.id)
             session_db.add(reclamacao)
+            session_db.flush() # Salva a reclamação para obter o ID
+
+            # Cria a primeira mensagem (a própria reclamação)
+            primeira_mensagem = Mensagem(
+                conteudo=descricao,
+                remetente_id=current_user.id,
+                reclamacao_id=reclamacao.id
+            )
+            session_db.add(primeira_mensagem)
             session_db.commit()
+
             flash('Reclamação enviada com sucesso!', 'success')
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('reclamacao_chat', reclamacao_id=reclamacao.id))
         except Exception as e:
             session_db.rollback()
             app.logger.exception(f'Erro ao criar reclamação: {e}')
@@ -730,85 +715,338 @@ def abrir_reclamacao():
             return redirect(url_for('abrir_reclamacao'))
         finally:
             session_db.close()
-
+    
     return render_template('abrir_reclamacao.html')
 
-
-@app.route('/reclamacoes', methods=['GET'])
+# Adicione esta nova rota no seu app.py, junto das outras rotas
+@app.route('/reclamacoes/<int:reclamacao_id>', methods=['GET', 'POST'], endpoint='reclamacao_chat')
 @login_required
-def visualizar_reclamacoes():
+def reclamacao_chat(reclamacao_id):
     session_db = Session()
     try:
-        usuario_ativo = session_db.query(Usuario).get(current_user.id)
-        requer_sindico(usuario_ativo)
+        reclamacao = session_db.query(Reclamacao).get(reclamacao_id)
+        if not reclamacao:
+            flash('Reclamação não encontrada.', 'error')
+            return redirect(url_for('dashboard'))
 
-        reclamacoes = session_db.query(Reclamacao).filter(Reclamacao.status == 'Pendente').all()
+        # Verifica se o usuário tem permissão para ver esta reclamação
+        # Acesso permitido se for o dono da reclamação ou se for um síndico do mesmo condomínio
+        if not (current_user.id == reclamacao.usuario_id or (current_user.tipo == TIPO_SINDICO and current_user.condominio_id == reclamacao.usuario.condominio_id)):
+            flash('Acesso negado.', 'error')
+            return redirect(url_for('dashboard'))
 
-        return render_template('reclamacoes.html', reclamacoes=reclamacoes)
+        # Lógica para enviar uma nova mensagem (POST)
+        if request.method == 'POST':
+            conteudo = request.form.get('conteudo')
+            if conteudo:
+                nova_mensagem = Mensagem(
+                    conteudo=conteudo,
+                    remetente_id=current_user.id,
+                    reclamacao_id=reclamacao.id
+                )
+                session_db.add(nova_mensagem)
+                session_db.commit()
+                flash('Mensagem enviada com sucesso!', 'success')
+                return redirect(url_for('reclamacao_chat', reclamacao_id=reclamacao.id))
+        
+        # Lógica para visualizar o chat (GET)
+        # As mensagens já vêm junto com a reclamação graças à relação `mensagens`
+        mensagens_chat = reclamacao.mensagens
+        
+        return render_template('reclamacao_chat.html', reclamacao=reclamacao, mensagens=mensagens_chat, user=current_user)
+    
     except Exception as e:
-        app.logger.exception(f'Erro em visualizar_reclamacoes: {e}')
+        session_db.rollback()
+        app.logger.exception(f'Erro no chat da reclamação: {e}')
         flash(f'Ocorreu um erro: {e}', 'error')
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
 
 
-@app.route('/reclamacoes/<int:reclamacao_id>/aprovar', methods=['POST'])
+
+@app.route('/reclamacoes', methods=['GET'], endpoint='lista_reclamacoes_sindico')
 @login_required
-def aprovar_reclamacao(reclamacao_id):
+def lista_reclamacoes_sindico():
     session_db = Session()
     try:
-        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        usuario_ativo = session_db.get(Usuario, current_user.id)
         requer_sindico(usuario_ativo)
 
-        reclamacao = session_db.query(Reclamacao).get(reclamacao_id)
-        if not reclamacao:
-            flash('Reclamação não encontrada.', 'error')
-            return redirect(url_for('visualizar_reclamacoes'))
+        reclamacoes = session_db.query(Reclamacao).join(Usuario).filter(
+            Usuario.condominio_id == usuario_ativo.condominio_id
+        ).all()
 
-        reclamacao.status = 'Aprovada'
-        session_db.commit()
-
-        flash('Reclamação aprovada com sucesso!', 'success')
-        return redirect(url_for('visualizar_reclamacoes'))
+        # AQUI ESTÁ A CORREÇÃO: passando a variável 'user'
+        return render_template('lista_reclamacoes_sindico.html', reclamacoes=reclamacoes, user=usuario_ativo)
     except Exception as e:
         session_db.rollback()
-        app.logger.exception(f'Erro ao aprovar reclamação: {e}')
-        flash(f'Erro ao aprovar: {e}', 'error')
-        return redirect(url_for('visualizar_reclamacoes'))
+        app.logger.exception(f'Erro ao listar reclamações do síndico: {e}')
+        flash(f'Ocorreu um erro: {e}', 'error')
+        return redirect(url_for('dashboard'))
+    finally:
+        session_db.close()
+
+# Adicione esta nova rota no seu app.py, junto com as outras
+@app.route('/minhas_reclamacoes', methods=['GET'], endpoint='minhas_reclamacoes')
+@login_required
+def minhas_reclamacoes():
+    session_db = Session()
+    try:
+        # Obtém todas as reclamações do usuário logado
+        reclamacoes_morador = session_db.query(Reclamacao).filter_by(usuario_id=current_user.id).all()
+
+        return render_template('minhas_reclamacoes.html', reclamacoes=reclamacoes_morador, user=current_user)
+    except Exception as e:
+        flash(f'Ocorreu um erro ao carregar suas reclamações: {e}', 'error')
+        return redirect(url_for('dashboard'))
     finally:
         session_db.close()
 
 
-@app.route('/reclamacoes/<int:reclamacao_id>/negar', methods=['POST'])
+
+# No seu app.py, adicione esta rota junto das outras
+@app.route('/reclamacoes/<int:reclamacao_id>/concluir', methods=['POST'])
 @login_required
-def negar_reclamacao(reclamacao_id):
+def concluir_reclamacao(reclamacao_id):
     session_db = Session()
     try:
-        usuario_ativo = session_db.query(Usuario).get(current_user.id)
+        usuario_ativo = session_db.get(Usuario, current_user.id)
         requer_sindico(usuario_ativo)
 
-        reclamacao = session_db.query(Reclamacao).get(reclamacao_id)
-        if not reclamacao:
-            flash('Reclamação não encontrada.', 'error')
-            return redirect(url_for('visualizar_reclamacoes'))
+        reclamacao = session_db.get(Reclamacao, reclamacao_id)
+        if not reclamacao or reclamacao.usuario.condominio_id != usuario_ativo.condominio_id:
+            flash('Reclamação não encontrada ou você não tem permissão para esta ação.', 'error')
+            return redirect(url_for('lista_reclamacoes_sindico'))
 
-        reclamacao.status = 'Negada'
+        reclamacao.status = 'Concluída'
         session_db.commit()
-
-        flash('Reclamação negada com sucesso.', 'success')
-        return redirect(url_for('visualizar_reclamacoes'))
+        flash(f'Reclamação "{reclamacao.titulo}" concluída com sucesso!', 'success')
+        
     except Exception as e:
         session_db.rollback()
-        app.logger.exception(f'Erro ao negar reclamação: {e}')
-        flash(f'Erro ao negar: {e}', 'error')
-        return redirect(url_for('visualizar_reclamacoes'))
+        flash(f'Ocorreu um erro ao concluir a reclamação: {e}', 'error')
+    finally:
+        session_db.close()
+    
+    return redirect(url_for('lista_reclamacoes_sindico'))
+
+
+# --- Adicione esta nova rota ao seu app.py, junto com as outras ---
+# No seu app.py, localize e substitua esta rota inteira
+@app.route('/agendar_reuniao', methods=['GET', 'POST'])
+@login_required
+def agendar_reuniao():
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+
+        # Lógica para processar o formulário
+        if request.method == 'POST':
+            titulo = request.form.get('titulo')
+            data = request.form.get('data')
+            local = request.form.get('local')
+            meet_link = request.form.get('meet_link')
+            participantes_ids = request.form.getlist('participantes')
+
+            if not all([titulo, data, participantes_ids]) or not (local or meet_link):
+                flash('Título, data, pelo menos um participante e um local (físico ou link do Meet) são obrigatórios!', 'error')
+                return redirect(url_for('agendar_reuniao'))
+            
+            data_reuniao = datetime.datetime.strptime(data, '%Y-%m-%d').date()
+
+            # Salva a reunião no banco de dados
+            nova_reuniao = Reuniao(
+                titulo=titulo,
+                data=data_reuniao,
+                local=local,
+                condominio_id=usuario_ativo.condominio_id,
+                meet_link=meet_link if meet_link else None
+            )
+            session_db.add(nova_reuniao)
+            session_db.flush()
+
+            # Adiciona os participantes
+            participantes_convidados = session_db.query(Usuario).filter(Usuario.id.in_(participantes_ids)).all()
+            nova_reuniao.participantes.extend(participantes_convidados)
+            
+            session_db.commit()
+
+            # Envia e-mail para os participantes
+            recipients = [p.email for p in participantes_convidados]
+            send_email(
+                subject=f'Nova Reunião Agendada: {titulo}',
+                recipients=recipients,
+                body=f"Olá, uma nova reunião foi agendada para o dia {data_reuniao.strftime('%d/%m/%Y')}. Título: {titulo}. Local: {local}. Link da reunião: {meet_link}",
+                html=f"Olá, uma nova reunião foi agendada para o dia {data_reuniao.strftime('%d/%m/%Y')}.<br>"
+                     f"Título: {titulo}<br>"
+                     f"Local: {local}<br>"
+                     f"Link da reunião: <a href='{meet_link}'>{meet_link}</a>"
+            )
+
+            flash('Reunião agendada com sucesso!', 'success')
+            return redirect(url_for('dashboard'))
+
+        # Lógica para exibir o formulário (GET)
+        moradores = session_db.query(Usuario).filter(
+            Usuario.condominio_id == usuario_ativo.condominio_id,
+            Usuario.tipo.in_([TIPO_MORADOR, TIPO_PENDENTE])
+        ).all()
+        
+        return render_template('agendar_reuniao.html', user=usuario_ativo, moradores=moradores)
+
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Ocorreu um erro: {e}', 'error')
+        app.logger.exception(f'Erro na rota agendar_reuniao: {e}')
+        return redirect(url_for('dashboard'))
     finally:
         session_db.close()
 
+# No seu arquivo app.py, adicione esta rota:
+@app.route('/comunicados', methods=['GET', 'POST'])
+@login_required
+def comunicados():
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+
+        if request.method == 'POST':
+            titulo = request.form.get('titulo')
+            conteudo = request.form.get('conteudo')
+
+            if not titulo or not conteudo:
+                flash('Título e conteúdo são obrigatórios!', 'error')
+                return redirect(url_for('comunicados'))
+
+            novo_comunicado = Comunicado(
+                titulo=titulo,
+                conteudo=conteudo,
+                usuario_id=usuario_ativo.id,
+                condominio_id=usuario_ativo.condominio_id
+            )
+            session_db.add(novo_comunicado)
+            session_db.commit()
+
+            flash('Comunicado postado com sucesso!', 'success')
+            return redirect(url_for('comunicados'))
+        
+        # Para requisições GET, busca e exibe os comunicados
+        comunicados_existentes = session_db.query(Comunicado).filter_by(
+            condominio_id=usuario_ativo.condominio_id
+        ).order_by(Comunicado.data_postagem.desc()).all()
+
+        return render_template('comunicados_sindico.html',
+                               user=usuario_ativo,
+                               comunicados=comunicados_existentes)
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Ocorreu um erro: {e}', 'error')
+        return redirect(url_for('dashboard'))
+    finally:
+        session_db.close()
+
+
+
+
+
+# No seu arquivo app.py, adicione estas duas novas rotas:
+
+@app.route('/editar_comunicado/<int:comunicado_id>', methods=['GET', 'POST'])
+@login_required
+def editar_comunicado(comunicado_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+        comunicado_a_editar = session_db.get(Comunicado, comunicado_id)
+
+        if not comunicado_a_editar or comunicado_a_editar.condominio_id != usuario_ativo.condominio_id:
+            flash('Comunicado não encontrado ou você não tem permissão para editá-lo.', 'error')
+            return redirect(url_for('comunicados'))
+
+        if request.method == 'POST':
+            comunicado_a_editar.titulo = request.form.get('titulo')
+            comunicado_a_editar.conteudo = request.form.get('conteudo')
+            session_db.commit()
+            flash('Comunicado editado com sucesso!', 'success')
+            return redirect(url_for('comunicados'))
+
+        return render_template('editar_comunicado.html', 
+                               comunicado=comunicado_a_editar,
+                               user=usuario_ativo)
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Ocorreu um erro: {e}', 'error')
+        return redirect(url_for('comunicados'))
+    finally:
+        session_db.close()
+
+@app.route('/excluir_comunicado/<int:comunicado_id>', methods=['POST'])
+@login_required
+def excluir_comunicado(comunicado_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+        comunicado_a_excluir = session_db.get(Comunicado, comunicado_id)
+        
+        if not comunicado_a_excluir or comunicado_a_excluir.condominio_id != usuario_ativo.condominio_id:
+            flash('Comunicado não encontrado ou você não tem permissão para excluí-lo.', 'error')
+            return redirect(url_for('comunicados'))
+        
+        session_db.delete(comunicado_a_excluir)
+        session_db.commit()
+        flash('Comunicado excluído com sucesso!', 'success')
+        return redirect(url_for('comunicados'))
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Ocorreu um erro: {e}', 'error')
+        return redirect(url_for('comunicados'))
+    finally:
+        session_db.close()
+
+
+# Adicione esta nova rota ao seu app.py, junto com as outras rotas:
+@app.route('/usuarios/<int:usuario_id>/excluir', methods=['POST'])
+@login_required
+def excluir_usuario(usuario_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+
+        usuario_a_excluir = session_db.get(Usuario, usuario_id)
+
+        if not usuario_a_excluir or usuario_a_excluir.condominio_id != usuario_ativo.condominio_id:
+            flash('Usuário não encontrado ou você não tem permissão para esta ação.', 'error')
+            return redirect(url_for('gerenciar_usuarios'))
+
+        # Impede o síndico de excluir a si mesmo
+        if usuario_a_excluir.id == usuario_ativo.id:
+            flash('Você não pode excluir a si mesmo.', 'error')
+            return redirect(url_for('gerenciar_usuarios'))
+
+        # Se o usuário a ser excluído for um síndico, a exclusão não é permitida sem um novo síndico
+        if usuario_a_excluir.tipo == TIPO_SINDICO:
+            flash('Não é possível excluir o síndico. Nomeie um novo síndico primeiro, se necessário.', 'error')
+            return redirect(url_for('gerenciar_usuarios'))
+
+        session_db.delete(usuario_a_excluir)
+        session_db.commit()
+        flash(f'Usuário {usuario_a_excluir.nome} excluído com sucesso.', 'success')
+
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Ocorreu um erro: {e}', 'error')
+    finally:
+        session_db.close()
+    
+    return redirect(url_for('gerenciar_usuarios'))
 
 
 # Execução local (produção: gunicorn)
 if __name__ == '__main__':
     app.run(debug=True)
-

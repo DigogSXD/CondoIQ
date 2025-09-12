@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Minhas Reclamações{% endblock %}
+
+{% block content %}
+    <div class="page">
+        <div class="header">
+            <div class="title-wrap">
+                <h1 class="title">Minhas Reclamações</h1>
+                <span class="badge-count">
+                    {% if reclamacoes %} {{ reclamacoes|length }} reclamação(ões) {% else %} 0 reclamações {% endif %}
+                </span>
+            </div>
+            <div class="user-actions">
+                <p>Bem-vindo, {{ current_user.nome }}!</p>
+                <a href="{{ url_for('logout') }}" class="btn btn-ghost">Sair</a>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-container">
+                    {% for category, message in messages %}
+                        <div class="flash {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% if reclamacoes %}
+            <section class="reclamacoes">
+                {% for reclamacao in reclamacoes %}
+                    <div class="reclamacao-item card" role="article">
+                        <div class="info">
+                            <h3>{{ reclamacao.titulo }}</h3>
+                            <p>Aberta em: {{ reclamacao.data_abertura.strftime('%d/%m/%Y') }}</p>
+                        </div>
+                        <div class="actions">
+                            <span class="reclamacao-status status-{{ reclamacao.status.replace(' ', '-') }}">
+                                {{ reclamacao.status }}
+                            </span>
+                            <a href="{{ url_for('reclamacao_chat', reclamacao_id=reclamacao.id) }}" class="btn btn-primary">Ver Chat</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </section>
+            <p>
+                <a href="{{ url_for('abrir_reclamacao') }}" class="btn btn-primary">Abrir Nova Reclamação</a>
+            </p>
+        {% else %}
+            <div class="card empty">
+                <div style="font-size:18px; font-weight:700; margin-bottom:6px;">Nenhuma reclamação encontrada</div>
+                <div>Você ainda não abriu nenhuma reclamação.</div>
+                <p>
+                    <a href="{{ url_for('abrir_reclamacao') }}" class="btn btn-primary">Abrir uma agora!</a>
+                </p>
+            </div>
+        {% endif %}
+        <p>
+            <a class="back" href="{{ url_for('dashboard') }}">← Voltar ao dashboard</a>
+        </p>
+    </div>
+
+    <style>
+        /* ====== Page-Specific Styles ====== */
+        .page {
+            max-width: 1100px;
+            margin: 32px auto;
+            padding: 0 20px;
+        }
+        .title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .title {
+            font-size: clamp(22px, 3vw, 28px);
+            margin: 0;
+        }
+        .badge-count {
+            background: #eef2ff;
+            color: #3730a3;
+            border: 1px solid #c7d2fe;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        .user-actions p {
+            margin: 0;
+            font-size: 14px;
+            color: var(--muted);
+        }
+        .reclamacoes {
+            margin-bottom: 20px;
+        }
+        .reclamacao-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            margin-bottom: 12px;
+            animation: slideIn 0.3s ease;
+        }
+        .reclamacao-item .info {
+            flex: 1;
+        }
+        .reclamacao-item .info h3 {
+            font-size: 18px;
+            color: var(--text);
+            margin: 0 0 8px;
+        }
+        .reclamacao-item .info p {
+            font-size: 14px;
+            color: var(--muted);
+            margin: 0;
+        }
+        .reclamacao-status {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 20px;
+            color: white;
+        }
+        .status-Pendente {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+        .status-Aprovada {
+            background: #dcfce7;
+            color: #15803d;
+        }
+        .status-Negada {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(2,6,23,.08);
+        }
+        .empty {
+            text-align: center;
+            color: var(--muted);
+            padding: 40px 16px;
+        }
+        .btn {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--line);
+            background: var(--card);
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.15s ease, filter 0.15s ease;
+            box-shadow: var(--shadow);
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            filter: brightness(0.98);
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: #0011ff;
+            border: none;
+            text-align: center;
+        }
+        .btn-primary:hover {
+            background: #00ff55;
+        }
+        .btn-ghost {
+            background: #fff;
+        }
+        .back {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 18px;
+            text-decoration: none;
+            color: var(--primary);
+            font-weight: 600;
+            transition: color 0.2s ease;
+        }
+        .back:hover {
+            text-decoration: underline;
+            color: #3730a3;
+        }
+
+        /* ====== Responsivo ====== */
+        @media (max-width: 700px) {
+            .reclamacao-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            .actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+            .reclamacao-status {
+                margin-left: 0;
+            }
+            .btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+{% endblock %}

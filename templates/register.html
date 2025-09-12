@@ -6,37 +6,18 @@
   <title>Cadastro - Condomínio Aquarela</title>
   <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
-  <style>
-    .flash { margin: 8px 0; padding: 10px; border-radius: 6px; font-size: 14px; }
-    .flash.success { background: #e6ffed; border: 1px solid #bef5cb; color: #2c662d; }
-    .flash.error   { background: #ffeef0; border: 1px solid #fdaeb7; color: #86181d; }
-    .flash.warning { background: #fff5e6; border: 1px solid #ffd391; color: #7a5200; }
-  </style>
 </head>
 <body class="auth-body">
   <div class="auth-container">
     <div class="auth-box">
-      <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquarela" class="auth-logo">
+      <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquareela" class="auth-logo">
       <h2>Cadastro</h2>
-
-      <!-- mensagens do backend -->
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <div class="flash {{ category }}">{{ message }}</div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
-
-      <form method="POST" action="{{ url_for('register') }}" autocomplete="off">
-        <input type="text" name="nome" placeholder="Nome completo" required
-               value="{{ request.form.get('nome','') }}" autocomplete="name">
-        <input type="email" name="email" placeholder="E-mail" required
-               value="{{ request.form.get('email','') }}" autocomplete="email">
-        <input type="password" name="senha" placeholder="Senha" required minlength="8" autocomplete="new-password">
+      <form method="POST" action="{{ url_for('register') }}">
+        <input type="text" name="nome" placeholder="Nome completo" required>
+        <input type="email" name="email" placeholder="E-mail" required>
+        <input type="password" name="senha" placeholder="Senha" required>
         <button type="submit" class="auth-btn">Cadastrar</button>
       </form>
-
       <p class="auth-text">
         Já tem conta? <a href="{{ url_for('login') }}">Faça login</a>
       </p>

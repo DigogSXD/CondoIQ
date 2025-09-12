@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Agendar Reunião{% endblock %}
+
+{% block page_title %}Agendar Nova Reunião{% endblock %}
+
+{% block content %}
+    <style>
+        .form-container {
+            max-width: 700px;
+            margin: 20px auto;
+            padding: 25px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="date"],
+        .form-group input[type="url"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        .participantes-list {
+            list-style: none;
+            padding: 0;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .participantes-list li {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .participantes-list li:last-child {
+            border-bottom: none;
+        }
+        .participantes-list input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .btn-submit {
+            padding: 12px 25px;
+            background-color: #190eda;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .btn-submit:hover {
+            background-color: #1d0dcd;
+        }
+        .btn-select-all {
+            padding: 8px 12px;
+            background-color: #6b7280;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .btn-select-all:hover {
+            background-color: #4b5563;
+        }
+    </style>
+    <div class="form-container">
+        <form method="post" action="{{ url_for('agendar_reuniao') }}">
+            <div class="form-group">
+                <label for="titulo">Título da Reunião</label>
+                <input type="text" id="titulo" name="titulo" required>
+            </div>
+            <div class="form-group">
+                <label for="data">Data da Reunião</label>
+                <input type="date" id="data" name="data" required>
+            </div>
+            <div class="form-group">
+                <label for="local">Local Físico (Ex: Sala de Reunião)</label>
+                <input type="text" id="local" name="local">
+            </div>
+            <div class="form-group">
+                <label for="meet_link">Link do Google Meet (Opcional)</label>
+                <input type="url" id="meet_link" name="meet_link">
+            </div>
+            <div class="form-group">
+                <label>
+                    Selecionar Participantes:
+                    <button type="button" class="btn-select-all" id="toggle-select-all">Selecionar Todos</button>
+                </label>
+                <ul class="participantes-list">
+                    {% for morador in moradores %}
+                        <li>
+                            <input type="checkbox" id="morador_{{ morador.id }}" name="participantes" value="{{ morador.id }}">
+                            <label for="morador_{{ morador.id }}">{{ morador.nome }} ({{ morador.email }})</label>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="form-group">
+                <button type="submit" class="btn-submit">Agendar Reunião</button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleButton = document.getElementById('toggle-select-all');
+            const checkboxes = document.querySelectorAll('input[name="participantes"]');
+            let allSelected = false;
+
+            toggleButton.addEventListener('click', function() {
+                allSelected = !allSelected;
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = allSelected;
+                });
+                toggleButton.textContent = allSelected ? 'Desmarcar Todos' : 'Selecionar Todos';
+            });
+        });
+    </script>
+{% endblock %}
