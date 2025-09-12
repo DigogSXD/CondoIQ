@@ -2,69 +2,73 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciar Usuários - Condomínio Aquarela</title>
-    <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
+    <title>Gerenciar Usuários</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
         <aside class="sidebar">
             <a href="{{ url_for('dashboard') }}" class="logo-link">
-                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo Aquarela" class="logo-img">
+                <img src="{{ url_for('static', filename='imagens/logo.png') }}" alt="Logo CondoIQ" class="logo-img">
             </a>
             <nav>
                 <ul>
-                    <li class="active"><a href="{{ url_for('gerenciar_usuarios') }}">Gerenciar Usuários</a></li>
-                    <li><a href="{{ url_for('comunicados') }}">Comunicados</a></li>
+                    <li><a href="{{ url_for('dashboard') }}">Home</a></li>
+                    <li><a href="{{ url_for('gerenciar_usuarios') }}">Gerenciar Usuários</a></li>
+                    <li><a href="{{ url_for('visualizar_reclamacoes') }}">Reclamações</a></li>
                 </ul>
             </nav>
         </aside>
 
         <main class="main-content">
             <header class="header">
-                <h1>Gerenciar Usuários</h1>
+                <h1>Gerenciamento de Usuários</h1>
+                <div class="user-actions">
+                    <p>Bem-vindo, {{ user.nome }}!</p>
+                    <a href="{{ url_for('logout') }}">Sair</a>
+                </div>
             </header>
 
-            <section class="usuarios-list">
-                <h2>Usuários Cadastrados</h2>
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Nome</th>
-                            <th>Email</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for usuario in usuarios %}
+            <!-- Mensagens flash -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container">
+                        {% for category, message in messages %}
+                            <div class="flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for usuario in usuarios %}
                         <tr>
                             <td>{{ usuario.nome }}</td>
                             <td>{{ usuario.email }}</td>
+                            <td>{{ 'Ativo' if usuario.is_ativo else 'Desativado' }}</td>
                             <td>
-                                {% if usuario.is_ativo %}
-                                    <span class="badge badge-success">Ativo</span>
-                                {% else %}
-                                    <span class="badge badge-danger">Desativado</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <form action="{{ url_for('gerenciar_usuarios') }}" method="POST" style="display:inline;">
+                                <form action="{{ url_for('gerenciar_usuarios') }}" method="POST">
                                     <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
-                                    <button type="submit" name="acao" value="ativar" class="btn btn-success" {% if usuario.is_ativo %}disabled{% endif %}>Ativar</button>
-                                    <button type="submit" name="acao" value="desativar" class="btn btn-danger" {% if not usuario.is_ativo %}disabled{% endif %}>Desativar</button>
+                                    {% if usuario.is_ativo %}
+                                        <button type="submit" name="acao" value="desativar">Desativar</button>
+                                    {% else %}
+                                        <button type="submit" name="acao" value="ativar">Ativar</button>
+                                    {% endif %}
                                 </form>
                             </td>
                         </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="4" class="text-center">Nenhum usuário encontrado.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </section>
+                    {% endfor %}
+                </tbody>
+            </table>
         </main>
     </div>
 </body>

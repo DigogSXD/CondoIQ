@@ -81,6 +81,7 @@ reuniao_participantes = Table(
 TIPO_SINDICO = 0
 TIPO_PENDENTE = 1
 TIPO_MORADOR = 2
+TIPO_DESATIVADO = 3  # Nova constante para morador desativado
 
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -93,13 +94,14 @@ class Usuario(Base):
     verification_code = Column(String(10), nullable=True)
     is_ativo = Column(Boolean, default=True, nullable=False)
 
-    condominio = relationship("Condominio", back_populates="usuarios", lazy='select')  # 'select' para carregamento otimizado
+    condominio = relationship("Condominio", back_populates="usuarios", lazy='select')
     reunioes = relationship("Reuniao", secondary=reuniao_participantes, back_populates="participantes")
 
     def is_authenticated(self): return True
     def is_active(self): return self.is_ativo
     def is_anonymous(self): return False
     def get_id(self): return str(self.id)
+
 
 
 class Reclamacao(Base):
@@ -644,7 +646,7 @@ def gerenciar_usuarios():
 
     session_db = Session()  # Abre uma nova sessão
     try:
-        # Certifique-se de carregar todos os dados de forma explícita
+        # Filtra os usuários do condomínio, incluindo os desativados
         usuarios = session_db.query(Usuario).filter(Usuario.condominio_id == current_user.condominio.id).all()
 
         if request.method == 'POST':
@@ -658,8 +660,10 @@ def gerenciar_usuarios():
 
             if acao == 'ativar':
                 usuario.is_ativo = True
+                usuario.tipo = TIPO_MORADOR  # Caso o usuário tenha sido desativado, ele volta ao tipo MORADOR
             elif acao == 'desativar':
                 usuario.is_ativo = False
+                usuario.tipo = TIPO_DESATIVADO  # Atualiza para tipo DESATIVADO
             else:
                 flash('Ação inválida!', 'error')
 
@@ -676,8 +680,6 @@ def gerenciar_usuarios():
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
-
-
 
 
 
