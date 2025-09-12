@@ -637,46 +637,61 @@ def comunicados():
     finally:
         session_db.close()
 
+# ============================================
+# Gerenciar usuários (Ativos e Desativados)
+# ============================================
+
 @app.route('/usuarios/gerenciar', methods=['GET', 'POST'])
 @login_required
 def gerenciar_usuarios():
+    # Verifica se o usuário logado é síndico
     if current_user.tipo != TIPO_SINDICO:
         flash('Acesso restrito.', 'error')
         return redirect(url_for('dashboard'))
 
-    session_db = Session()  # Abre uma nova sessão
+    session_db = Session()
     try:
-        # Filtra os usuários do condomínio, incluindo os desativados
-        usuarios = session_db.query(Usuario).filter(Usuario.condominio_id == current_user.condominio_id).all()
-
+        # Pega o objeto do usuário atual em uma nova sessão para garantir que as relações estejam disponíveis
+        usuario_ativo_db = session_db.query(Usuario).get(current_user.id)
+        
+        # Filtra todos os usuários do condomínio, excluindo o síndico
+        usuarios_condominio = session_db.query(Usuario).filter(
+            Usuario.condominio_id == usuario_ativo_db.condominio_id,
+            Usuario.tipo != TIPO_SINDICO
+        ).all()
+        
+        # Lógica para ativar/desativar usuários via POST
         if request.method == 'POST':
             usuario_id = request.form.get('usuario_id')
             acao = request.form.get('acao')
             usuario = session_db.query(Usuario).get(usuario_id)
 
-            if usuario is None:
-                flash('Usuário não encontrado!', 'error')
+            if usuario is None or usuario.condominio_id != usuario_ativo_db.condominio_id:
+                flash('Usuário não encontrado ou não pertence ao seu condomínio!', 'error')
                 return redirect(url_for('gerenciar_usuarios'))
 
             if acao == 'ativar':
+                # Garante que o usuário desativado volte a ser um morador
+                if usuario.tipo == TIPO_DESATIVADO:
+                    usuario.tipo = TIPO_MORADOR
                 usuario.is_ativo = True
-                usuario.tipo = TIPO_MORADOR  # Caso o usuário tenha sido desativado, ele volta ao tipo MORADOR
+                flash(f'Usuário {usuario.nome} ativado com sucesso!', 'success')
             elif acao == 'desativar':
                 usuario.is_ativo = False
-                usuario.tipo = TIPO_DESATIVADO  # Atualiza para tipo DESATIVADO
+                usuario.tipo = TIPO_DESATIVADO
+                flash(f'Usuário {usuario.nome} desativado com sucesso!', 'success')
             else:
                 flash('Ação inválida!', 'error')
-
+            
             session_db.commit()
-            flash(f'Usuário {usuario.nome} {"ativado" if usuario.is_ativo else "desativado"} com sucesso!', 'success')
             return redirect(url_for('gerenciar_usuarios'))
 
-        return render_template('gerenciar_usuarios.html', usuarios=usuarios)
+        # Renderiza a página com a lista de usuários para a visualização GET
+        return render_template('gerenciar_usuarios.html', usuarios=usuarios_condominio)
 
     except Exception as e:
         session_db.rollback()
-        app.logger.exception(f'Erro ao gerenciar usuários: {e}')
-        flash('Erro ao gerenciar usuários. Tente novamente.', 'error')
+        flash(f'Ocorreu um erro: {e}', 'error')
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
