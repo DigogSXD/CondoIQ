@@ -285,9 +285,11 @@ def register():
                         tipo=TIPO_SINDICO
                     )
                     condominio_inicial = Condominio(
-                        nome="Condomínio Padrão",
-                        endereco="Endereço Padrão",
-                        status="ativo"
+                        nome="Aquarela",
+                        endereco="Rua 06 chácara",
+                        status="ativo",
+                        cnpj="04341404000108",
+                        email="AquarelaCondoIQ@gmail.com"
                     )
                     session_db.add(condominio_inicial)
                     novo_usuario.condominio = condominio_inicial
