@@ -129,6 +129,23 @@ class Condominio(Base):
     despesas = relationship("Despesa", back_populates="condominio")
     reunioes = relationship("Reuniao", back_populates="condominio")
 
+
+class Comunicado(Base):
+    __tablename__ = 'comunicados'
+    id = Column(Integer, primary_key=True)
+    titulo = Column(String(150), nullable=False)
+    conteudo = Column(String(1000), nullable=False)
+    data_postagem = Column(Date, default=datetime.date.today)
+    usuario_id = Column(Integer, ForeignKey('usuarios.id'), nullable=False)
+    condominio_id = Column(Integer, ForeignKey('condominio.id'), nullable=False)
+    
+    usuario = relationship("Usuario", back_populates="comunicados")
+    condominio = relationship("Condominio", back_populates="comunicados")
+
+Usuario.comunicados = relationship("Comunicado", back_populates="usuario")
+Condominio.comunicados = relationship("Comunicado", back_populates="condominio")
+
+
 class Despesa(Base):
     __tablename__ = "despesas"
     id = Column(Integer, primary_key=True)
@@ -626,6 +643,7 @@ def gerenciar_usuarios():
 
     session_db = Session()
     try:
+        # Obtendo todos os usuários do condomínio
         usuarios = session_db.query(Usuario).filter(Usuario.condominio_id == current_user.condominio.id).all()
 
         if request.method == 'POST':
@@ -633,13 +651,20 @@ def gerenciar_usuarios():
             acao = request.form.get('acao')
             usuario = session_db.query(Usuario).get(usuario_id)
 
+            if usuario is None:
+                flash('Usuário não encontrado!', 'error')
+                return redirect(url_for('gerenciar_usuarios'))
+
             if acao == 'ativar':
                 usuario.is_ativo = True
+                flash(f'Usuário {usuario.nome} ativado com sucesso!', 'success')
             elif acao == 'desativar':
                 usuario.is_ativo = False
+                flash(f'Usuário {usuario.nome} desativado com sucesso!', 'success')
+            else:
+                flash('Ação inválida!', 'error')
 
             session_db.commit()
-            flash(f'Usuário {usuario.nome} {"ativado" if usuario.is_ativo else "desativado"} com sucesso!', 'success')
             return redirect(url_for('gerenciar_usuarios'))
 
         return render_template('gerenciar_usuarios.html', usuarios=usuarios)
@@ -651,6 +676,7 @@ def gerenciar_usuarios():
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
+
 
 
 
