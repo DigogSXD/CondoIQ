@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Abrir Reclamação{% endblock %}
+
+{% block page_title %}Abrir Nova Reclamação{% endblock %}
+
+{% block content %}
+    <style>
+        /* Estilos específicos para esta página */
+        .page {
+            max-width: 1100px;
+            margin: 32px auto;
+            padding: 0 20px;
+        }
+        .form-container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            animation: slideIn 0.3s ease;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text);
+            font-size: 14px;
+        }
+        /* Estilo dos inputs e textareas */
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: var(--card);
+            outline: none;
+            font-size: 14px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: var(--shadow);
+            color: var(--text); /* Cor do texto dentro do input */
+        }
+        .form-group input:focus,
+        .form-group textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+        .form-group textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+        /* Estilo do botão primário */
+        .btn-primary {
+            background: var(--primary);
+            color: #ffffff;
+            border: none;
+            text-align: center;
+        }
+        .btn-primary:hover {
+            background: #3d38d6;
+        }
+        .back {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 18px;
+            text-decoration: none;
+            color: var(--primary);
+            font-weight: 600;
+            transition: color 0.2s ease;
+        }
+        .back:hover {
+            text-decoration: underline;
+            color: #3730a3;
+        }
+    </style>
+    
+    <div class="card form-container">
+        <form method="post" action="{{ url_for('abrir_reclamacao') }}" aria-label="Formulário para abrir nova reclamação">
+            <div class="form-group">
+                <label for="titulo">Título da Reclamação</label>
+                <input type="text" id="titulo" name="titulo" required aria-required="true" placeholder="Digite o título da reclamação">
+            </div>
+            <div class="form-group">
+                <label for="descricao">Descrição Detalhada</label>
+                <textarea id="descricao" name="descricao" required aria-required="true" placeholder="Descreva o problema ou sugestão"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Enviar Reclamação</button>
+        </form>
+        <p>
+            <a class="back" href="{{ url_for('dashboard') }}">← Voltar ao dashboard</a>
+        </p>
+    </div>
+{% endblock %}

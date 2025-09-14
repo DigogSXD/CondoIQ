@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard do Síndico{% endblock %}
+
+{% block page_title %}Painel do Síndico{% endblock %}
+
+{% block content %}
+    <style>
+        /* Estilos específicos para a página de dashboard do síndico */
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #f0f4f8; /* Light gray-blue, replacing white */
+            border: 1px solid #e2e8f0; /* Softer gray border */
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(2,6,23,.08);
+        }
+        .card h3 {
+            margin: 0 0 10px;
+            font-size: 16px;
+            color: #1e3a8a; /* Dark blue for headers */
+        }
+        .card .valor {
+            font-size: 24px;
+            font-weight: 700;
+            color: #2563eb; /* Primary blue from base CSS */
+            margin: 0 0 8px;
+        }
+        .card small {
+            color: #718096; /* Muted gray for small text */
+            font-size: 12px;
+        }
+        .btn-primary {
+            background: #ffffff; /* Primary blue from base CSS */
+            color: rgb(49, 4, 253); /* Fixed from incorrect #1100ff */
+            border: none;
+            margin-top: 12px;
+            text-align: center;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: background 0.2s ease;
+        }
+        .btn-primary:hover {
+            background: #ffffff; /* Darker blue on hover, matching base CSS */
+        }
+        .info-condominio {
+            margin-bottom: 30px;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .section-header h2 {
+            margin: 0;
+            font-size: 20px;
+            color: #1e3a8a;
+        }
+        .info-condominio .card {
+            background: #e6f0fa; /* Light grayish-blue for info card */
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .info-item {
+            display: flex;
+            gap: 10px;
+            padding: 12px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        .info-item strong {
+            flex: 0 0 100px;
+            color: #1e3a8a; /* Dark blue for labels */
+            font-weight: 600;
+        }
+        .info-item span {
+            flex: 1;
+            color: #4a5568; /* Slate gray for content */
+        }
+        .comunicados {
+            margin-bottom: 30px;
+        }
+        .comunicados h2 {
+            font-size: 20px;
+            margin-bottom: 16px;
+            color: #1e3a8a; /* Dark blue for headers */
+        }
+        .comunicado.card {
+            background: #f0f4f8; /* Light gray-blue for comunicado cards */
+            margin-bottom: 12px;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            animation: slideIn 0.3s ease;
+        }
+        .comunicado p {
+            margin: 0 0 8px;
+            color: #4a5568; /* Slate gray for content */
+        }
+        .comunicado strong {
+            font-size: 16px;
+            color: #1e3a8a; /* Dark blue for titles */
+        }
+        .comunicado small {
+            color: #718096; /* Muted gray for metadata */
+            font-size: 12px;
+            display: block;
+        }
+        .empty {
+            text-align: center;
+            color: #718096; /* Muted gray for empty state */
+            padding: 40px 16px;
+            background: #f0f4f8; /* Light gray-blue for empty card */
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+        .btn-action {
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            text-decoration: none;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+        .btn-edit {
+            background-color: #3b82f6;
+        }
+        .btn-edit:hover {
+            background-color: #2563eb;
+        }
+    </style>
+
+    <div class="page">
+        <section class="cards">
+            <div class="card">
+                <h3>Moradores Cadastrados</h3>
+                <p class="valor">{{ moradores }}</p>
+                <small>Total de usuários no condomínio</small>
+            </div>
+            <div class="card">
+                <h3>Moradores Pendentes</h3>
+                <p class="valor">{{ pendentes|length if pendentes else 0 }}</p>
+                <small>Usuários aguardando aprovação</small>
+                <a href="{{ url_for('moradores_pendentes') }}" class="btn btn-primary">Gerenciar</a>
+            </div>
+            <div class="card">
+                <h3>Reclamações Abertas</h3>
+                <p class="valor">{{ reclamacoes|length if reclamacoes else 0 }}</p>
+                <small>Reclamações aguardando resposta</small>
+                <a href="{{ url_for('lista_reclamacoes_sindico') }}" class="btn btn-primary">Ver Reclamações</a>
+            </div>
+        </section>
+
+
+        <section class="info-condominio">
+            <div class="section-header">
+                <h2>Informações do Condomínio</h2>
+                <a href="{{ url_for('editar_condominio') }}" class="btn-action btn-edit">Editar</a>
+            </div>
+            <div class="card">
+                <div class="info-item">
+                    <strong>Nome:</strong> <span>{{ condominio.nome }}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Endereço:</strong> <span>{{ condominio.endereco }}</span>
+                </div>
+                <div class="info-item">
+                    <strong>CNPJ:</strong> <span>{{ condominio.cnpj if condominio.cnpj else '—' }}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Email:</strong> <span>{{ condominio.email if condominio.email else '—' }}</span>
+                </div>
+                <div class="info-item">
+                    <strong>Telefone:</strong> <span>{{ condominio.telefone if condominio.telefone else '—' }}</span>
+                </div>
+            </div>
+        </section>
+    
+        <section class="comunicados">
+            <h2>Comunicados Recentes</h2>
+            {% if comunicados %}
+                {% for comunicado in comunicados %}
+                    <div class="comunicado card">
+                        <p><strong>{{ comunicado.titulo }}</strong></p>
+                        <p>{{ comunicado.conteudo }}</p>
+                        <small>Publicado por {{ comunicado.usuario.nome }} em {{ comunicado.data_postagem.strftime('%d/%m/%Y') }}</small>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="card empty">
+                    <div style="font-size:18px; font-weight:700; margin-bottom:6px;">Nenhum comunicado</div>
+                    <div>Ainda não há comunicados publicados.</div>
+                </div>
+            {% endif %}
+            <a href="{{ url_for('comunicados') }}" class="btn btn-primary">Ver Todos os Comunicados</a>
+        </section>
+    </div>
+{% endblock %}

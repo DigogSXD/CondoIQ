@@ -1,0 +1,79 @@
+/* ===== Telas de Login e Cadastro ===== */
+.auth-body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+}
+
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.auth-box {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  text-align: center;
+  width: 100%;
+  max-width: 400px;
+}
+
+.auth-logo {
+  max-width: 120px;
+  margin-bottom: 15px;
+}
+
+.auth-box h2 {
+  margin-bottom: 20px;
+  color: #1e3a8a;
+}
+
+.auth-box form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.auth-box input {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.auth-box input:focus {
+  border-color: #2563eb;
+}
+
+.auth-btn {
+  background: #2563eb;
+  color: white;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.3s;
+}
+
+.auth-btn:hover {
+  background: #1e3a8a;
+}
+
+.auth-text {
+  margin-top: 15px;
+  font-size: 14px;
+}
+
+.auth-text a {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: bold;
+}

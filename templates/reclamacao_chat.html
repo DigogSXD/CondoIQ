@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat - Reclamação #{{ reclamacao.id }}</title>
+    <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Estilos específicos para o chat */
+        .chat-container {
+            max-width: 800px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .chat-header {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .message {
+            padding: 10px;
+            border-radius: 15px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        .message.morador {
+            background: #eef2ff;
+            align-self: flex-start;
+        }
+        .message.sindico {
+            background: #dcfce7;
+            align-self: flex-end;
+        }
+        .message small {
+            display: block;
+            font-size: 12px;
+            color: #777;
+            margin-top: 5px;
+        }
+        .chat-input {
+            display: flex;
+            gap: 10px;
+        }
+        .chat-input textarea {
+            flex-grow: 1;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            resize: none;
+            height: 60px;
+        }
+        .chat-input button {
+            padding: 10px 20px;
+            background: #4f46e5;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .chat-input button:hover {
+            background: #4338ca;
+        }
+        .back-link {
+            margin-top: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <header class="chat-header">
+            <h1>Reclamação #{{ reclamacao.id }}: {{ reclamacao.titulo }}</h1>
+            <p>Status: **{{ reclamacao.status }}**</p>
+        </header>
+
+        <div class="chat-messages">
+            {% for mensagem in mensagens %}
+                <div class="message {% if mensagem.remetente_id == reclamacao.usuario_id %}morador{% else %}sindico{% endif %}">
+                    <strong>{{ mensagem.remetente.nome }}:</strong>
+                    <p>{{ mensagem.conteudo }}</p>
+                    <small>{{ mensagem.data_envio.strftime('%d/%m/%Y') }}</small>
+                </div>
+            {% endfor %}
+        </div>
+        
+        {% if reclamacao.status != 'Concluída' %}
+        <form method="post" action="{{ url_for('reclamacao_chat', reclamacao_id=reclamacao.id) }}" class="chat-input">
+            <textarea name="conteudo" placeholder="Digite sua mensagem..." required></textarea>
+            <button type="submit">Enviar</button>
+            <a href="{{ url_for('dashboard') }}" class="back-link">← Voltar ao Dashboard</a>
+        </form>
+        {% else %}
+        <div class="chat-closed-message">
+            <p>Esta reclamação foi concluída e não aceita novas mensagens.</p>
+        </div>
+        {% endif %}
+
+        
+    </div>
+</body>
+</html>
