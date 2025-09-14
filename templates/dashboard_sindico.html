@@ -195,7 +195,26 @@
                 </div>
             </div>
         </section>
-    
+        <section class="reunioes">
+            <h2>Reuniões Agendadas</h2>
+            {% if reunioes %}
+                {% for reuniao in reunioes %}
+                    <div class="reuniao card">
+                        <p><strong>{{ reuniao.titulo }}</strong></p>
+                        <p><small>Data: {{ reuniao.data.strftime('%d/%m/%Y') }}</small></p>
+                        <p><small>Local: {{ reuniao.local }}</small></p>
+                        {% if reuniao.meet_link %}
+                            <p><small>Link: <a href="{{ reuniao.meet_link }}" target="_blank" class="link">Entrar na Reunião</a></small></p>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="card empty">
+                    <div style="font-size:18px; font-weight:700; margin-bottom:6px;">Nenhuma reunião</div>
+                    <div>Você não foi convidado para nenhuma reunião.</div>
+                </div>
+            {% endif %}
+        </section>
         <section class="comunicados">
             <h2>Comunicados Recentes</h2>
             {% if comunicados %}
@@ -215,4 +234,7 @@
             <a href="{{ url_for('comunicados') }}" class="btn btn-primary">Ver Todos os Comunicados</a>
         </section>
     </div>
+
+
+
 {% endblock %}
