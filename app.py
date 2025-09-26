@@ -1130,7 +1130,66 @@ def excluir_reuniao(reuniao_id):
 
 
 
+# --- ATENÇÃO: Rota de teste temporária! Remova após o uso. ---
+import smtplib
+
+@app.route('/testemail')
+def test_email_route():
+    # Pega as credenciais do ambiente
+    MAIL_SERVER = os.getenv('MAIL_SERVER')
+    MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
+    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+    MAIL_SENDER = os.getenv('MAIL_DEFAULT_SENDER')
+
+    # --- Coloque seu e-mail pessoal aqui para receber o teste ---
+    RECIPIENT_EMAIL = 'diogodbm9@gmail.com'
+    # -----------------------------------------------------------
+
+    output = []
+    output.append("--- INICIANDO TESTE DE E-MAIL ---")
+    output.append(f"Servidor: {MAIL_SERVER}:{MAIL_PORT}")
+    output.append(f"Usuário: {MAIL_USERNAME}")
+    output.append(f"Remetente: {MAIL_SENDER}")
+
+    if not all([MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_SENDER]):
+        output.append("\n[ERRO] Variáveis de ambiente faltando!")
+        return "<br>".join(output)
+
+    server = None
+    try:
+        output.append("\n1. Conectando ao servidor SMTP...")
+        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=20)
+        output.append("2. Iniciando TLS...")
+        server.starttls()
+        output.append("3. Fazendo login...")
+        server.login(MAIL_USERNAME, MAIL_PASSWORD)
+        output.append("4. Enviando e-mail...")
+        
+        subject = "Teste de Conexão CondoIQ - Render"
+        body = "A conexão com o SendGrid via rota Flask está funcionando!"
+        message = f"Subject: {subject}\n\n{body}"
+        server.sendmail(MAIL_SENDER, RECIPIENT_EMAIL, message)
+        
+        output.append("\n[SUCESSO] E-mail enviado com sucesso!")
+
+    except smtplib.SMTPAuthenticationError as e:
+        output.append(f"\n[ERRO DE AUTENTICAÇÃO] {e}")
+        output.append("-> Causa: 'MAIL_PASSWORD' (API Key) está incorreta.")
+    except Exception as e:
+        output.append(f"\n[ERRO INESPERADO] {e}")
+    finally:
+        if server:
+            output.append("\n5. Fechando conexão.")
+            server.quit()
+        output.append("--- TESTE FINALIZADO ---")
+
+    # Retorna o resultado no navegador
+    return "<pre>" + "\n".join(output) + "</pre>"
+# ---------------- Fim da rota de teste --------------------
+
 
 # Execução local (produção: gunicorn)
 if __name__ == '__main__':
+
     app.run(debug=True)
