@@ -13,10 +13,19 @@ from smtplib import SMTPException
 from dotenv import load_dotenv
 from sqlalchemy.exc import IntegrityError
 
+# extras para e-mail API
+from threading import Thread
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail as SGMail
+
 load_dotenv()
 
 # ============================================
 # BANCO DE DADOS (Configuração Local)
+# ============================================
+
+# ============================================
+# BANCO DE DADOS
 # ============================================
 
 def build_db_url_from_parts() -> str:
@@ -26,7 +35,7 @@ def build_db_url_from_parts() -> str:
         raise RuntimeError(
             "Variáveis de banco ausentes: "
             + ", ".join(missing)
-            + ". Defina DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME e (opcional) DB_SSL=true."
+            + "."
         )
 
     db_host = os.getenv("DB_HOST")
@@ -36,7 +45,6 @@ def build_db_url_from_parts() -> str:
     db_name = os.getenv("DB_NAME")
     db_ssl  = os.getenv("DB_SSL", "false").lower() == "true"
 
-    # URL-encode na senha (trata @ ? : # & / etc.)
     db_pass_enc = quote_plus(db_pass)
 
     qs = "charset=utf8mb4"
@@ -46,12 +54,7 @@ def build_db_url_from_parts() -> str:
     return f"mysql+pymysql://{db_user}:{db_pass_enc}@{db_host}:{db_port}/{db_name}?{qs}"
 
 DATABASE_URL = build_db_url_from_parts()
-
-_use_ssl = (
-    "ssl=true" in DATABASE_URL
-    or "aivencloud.com" in DATABASE_URL
-    or os.getenv("DB_SSL", "false").lower() == "true"
-)
+_use_ssl = "ssl=true" in DATABASE_URL or "aivencloud.com" in DATABASE_URL or os.getenv("DB_SSL", "false").lower() == "true"
 
 engine = create_engine(
     DATABASE_URL,
@@ -60,14 +63,6 @@ engine = create_engine(
     pool_recycle=280,
     connect_args={'ssl': {}} if _use_ssl else {}
 )
-
-# Log da URL com senha mascarada
-try:
-    from sqlalchemy.engine import url as sa_url
-    _parsed = sa_url.make_url(DATABASE_URL)
-    print("DB URL OK:", _parsed.set(password="***"))
-except Exception as e:
-    print("DATABASE_URL (montada via DB_*) inválida:", e)
 
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
@@ -205,9 +200,9 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "troque_esta_chave_por_uma_muito_secreta")
 ALLOW_REGISTER_WITHOUT_EMAIL = os.getenv('ALLOW_REGISTER_WITHOUT_EMAIL', 'true').lower() == 'true'
 
+# healthz/dbcheck
 @app.get("/healthz")
-def healthz():
-    return "ok", 200
+def healthz(): return "ok", 200
 
 @app.get("/dbcheck")
 def dbcheck():
@@ -218,6 +213,7 @@ def dbcheck():
     except Exception as e:
         return f"db fail: {e}", 500
 
+# login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -234,32 +230,69 @@ def load_user(user_id):
 # E-MAIL (Configuração Local)
 # ============================================
 
+
+USE_SENDGRID_API = bool(os.getenv("SENDGRID_API_KEY"))
+
 app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.sendgrid.net')
 app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', '587'))
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'true').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'apikey')   # SendGrid: SEMPRE "apikey"
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')              # API key SG.xxxxx
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'apikey')   # SendGrid SMTP
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')              # SendGrid API key
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER')  # remetente verificado
 
 mail = Mail(app)
 
-def send_email(subject: str, recipients: list[str], body: str, html: str | None = None) -> bool:
-    if not app.config.get('MAIL_USERNAME') or not app.config.get('MAIL_PASSWORD') or not app.config.get('MAIL_DEFAULT_SENDER'):
-        app.logger.error('Config SMTP incompleta: verifique MAIL_USERNAME/MAIL_PASSWORD/MAIL_DEFAULT_SENDER.')
-        return False
-    try:
-        msg = Message(subject=subject, recipients=recipients)
-        msg.body = body
-        if html:
-            msg.html = html
-        mail.send(msg)
+def _async(target, *args, **kwargs):
+    t = Thread(target=target, args=args, kwargs=kwargs, daemon=True)
+    t.start()
+    return t
+
+def send_email(subject: str, recipients: list[str], body: str, html: str | None = None, *, async_send: bool = False) -> bool:
+    def _send_via_api() -> bool:
+        api_key = os.getenv("SENDGRID_API_KEY")
+        sender = os.getenv("MAIL_DEFAULT_SENDER")
+        if not api_key or not sender:
+            app.logger.error("Config SendGrid incompleta.")
+            return False
+        try:
+            sg = SendGridAPIClient(api_key)
+            msg = SGMail(
+                from_email=sender,
+                to_emails=recipients,
+                subject=subject,
+                html_content=html if html else None,
+                plain_text_content=body if not html else None,
+            )
+            resp = sg.send(msg)
+            ok = 200 <= resp.status_code < 300
+            if ok:
+                app.logger.info("E-mail enviado por SendGrid API.")
+            else:
+                app.logger.error(f"SendGrid falhou: {resp.status_code} {resp.body}")
+            return ok
+        except Exception as e:
+            app.logger.exception(f"Erro SendGrid API: {e}")
+            return False
+
+    def _send_via_smtp() -> bool:
+        try:
+            msg = Message(subject=subject, recipients=recipients)
+            msg.body = body
+            if html: msg.html = html
+            mail.send(msg)
+            app.logger.info("E-mail enviado por SMTP.")
+            return True
+        except Exception as e:
+            app.logger.exception(f"Erro SMTP: {e}")
+            return False
+
+    def _do_send(): return _send_via_api() if USE_SENDGRID_API else _send_via_smtp()
+    if async_send:
+        _async(_do_send)
         return True
-    except SMTPException as e:
-        app.logger.exception(f'Falha ao enviar e-mail (SMTPException): {e}')
-        return False
-    except Exception as e:
-        app.logger.exception(f'Erro inesperado ao enviar e-mail: {e}')
-        return False
+    else:
+        return _do_send()
+
 
 # ============================================
 # HELPERS
@@ -305,23 +338,20 @@ def register():
                 session['verification_code'] = verification_code
                 session['pending_registration'] = {'nome': nome, 'email': email, 'senha': senha}
 
-                enviado = send_email(
+                # === ALTERAÇÃO: envio assíncrono (não bloqueia o worker) ===
+                send_email(
                     'Código de Verificação - CondoIQ',
                     [email],
-                    f'Seu código de verificação é: {verification_code}'
+                    f'Seu código de verificação é: {verification_code}',
+                    async_send=True
                 )
 
-                if not enviado and not ALLOW_REGISTER_WITHOUT_EMAIL:
-                    flash('Não foi possível enviar o e-mail de verificação. Verifique as configurações de e-mail.', 'error')
-                    return redirect(url_for('register'))
-
-                if not enviado and ALLOW_REGISTER_WITHOUT_EMAIL:
+                # Em modo teste, mostrar o código na tela de verificação
+                if ALLOW_REGISTER_WITHOUT_EMAIL:
                     app.logger.warning(f'EMAIL NÃO ENVIADO (modo teste). Código: {verification_code}')
                     session['show_verification_code'] = verification_code
-                    flash('E-mail não enviado (modo teste). Use o código exibido na tela de verificação.', 'warning')
-                else:
-                    flash('Um código de verificação foi enviado para o seu email. Insira-o para confirmar.', 'success')
 
+                flash('Um código de verificação foi enviado. Se não chegar em alguns minutos, peça reenvio.', 'success')
                 return redirect(url_for('register', step='verify'))
 
             else:
@@ -378,6 +408,7 @@ def register():
         return render_template('verify.html')
     return render_template('register.html')
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -420,24 +451,20 @@ def forgot_password():
                 session['reset_code'] = reset_code
                 session['reset_email'] = email
 
-                enviado = send_email(
+                # === ALTERAÇÃO: envio assíncrono ===
+                send_email(
                     'Código de Redefinição de Senha - CondoIQ',
                     [email],
                     f'Seu código de redefinição de senha é: {reset_code}',
-                    f'Seu código de redefinição de senha é: <b>{reset_code}</b>'
+                    f'Seu código de redefinição de senha é: <b>{reset_code}</b>',
+                    async_send=True
                 )
 
-                if not enviado and not ALLOW_REGISTER_WITHOUT_EMAIL:
-                    flash('Não foi possível enviar o e-mail de redefinição. Verifique as configurações de e-mail.', 'error')
-                    return redirect(url_for('forgot_password'))
-
-                if not enviado and ALLOW_REGISTER_WITHOUT_EMAIL:
+                if ALLOW_REGISTER_WITHOUT_EMAIL:
                     app.logger.warning(f'EMAIL NÃO ENVIADO (modo teste). Código reset: {reset_code}')
                     session['show_reset_code'] = reset_code
-                    flash('E-mail não enviado (modo teste). Use o código exibido para continuar.', 'warning')
-                else:
-                    flash('Um código de redefinição foi enviado para o seu email. Insira-o para continuar.', 'success')
 
+                flash('Um código de redefinição foi enviado. Se não chegar em alguns minutos, peça reenvio.', 'success')
                 return redirect(url_for('forgot_password', step='verify'))
 
             elif step == 'verify':
@@ -484,6 +511,7 @@ def forgot_password():
             session_db.close()
 
     return render_template('forgot_password.html', step=step)
+
 
 @app.route('/logout')
 @login_required
@@ -856,7 +884,6 @@ def agendar_reuniao():
         usuario_ativo = session_db.get(Usuario, current_user.id)
         requer_sindico(usuario_ativo)
 
-        # Lógica para processar o formulário
         if request.method == 'POST':
             titulo = request.form.get('titulo')
             data = request.form.get('data')
@@ -870,7 +897,6 @@ def agendar_reuniao():
             
             data_reuniao = datetime.datetime.strptime(data, '%Y-%m-%d').date()
 
-            # Salva a reunião no banco de dados
             nova_reuniao = Reuniao(
                 titulo=titulo,
                 data=data_reuniao,
@@ -881,28 +907,26 @@ def agendar_reuniao():
             session_db.add(nova_reuniao)
             session_db.flush()
 
-            # Adiciona os participantes
             participantes_convidados = session_db.query(Usuario).filter(Usuario.id.in_(participantes_ids)).all()
             nova_reuniao.participantes.extend(participantes_convidados)
-            
             session_db.commit()
 
-            # Envia e-mail para os participantes
+            # === ALTERAÇÃO: envio assíncrono dos convites ===
             recipients = [p.email for p in participantes_convidados]
             send_email(
                 subject=f'Nova Reunião Agendada: {titulo}',
                 recipients=recipients,
                 body=f"Olá, uma nova reunião foi agendada para o dia {data_reuniao.strftime('%d/%m/%Y')}. Título: {titulo}. Local: {local}. Link da reunião: {meet_link}",
-                html=f"Olá, uma nova reunião foi agendada para o dia {data_reuniao.strftime('%d/%m/%Y')}.<br>"
-                     f"Título: {titulo}<br>"
-                     f"Local: {local}<br>"
-                     f"Link da reunião: <a href='{meet_link}'>{meet_link}</a>"
+                html=(f"Olá, uma nova reunião foi agendada para o dia {data_reuniao.strftime('%d/%m/%Y')}.<br>"
+                      f"Título: {titulo}<br>"
+                      f"Local: {local}<br>"
+                      f"Link da reunião: <a href='{meet_link}'>{meet_link}</a>") if meet_link else None,
+                async_send=True
             )
 
             flash('Reunião agendada com sucesso!', 'success')
             return redirect(url_for('dashboard'))
 
-        # Lógica para exibir o formulário (GET)
         moradores = session_db.query(Usuario).filter(
             Usuario.condominio_id == usuario_ativo.condominio_id,
             Usuario.tipo.in_([TIPO_MORADOR, TIPO_PENDENTE])
@@ -917,6 +941,7 @@ def agendar_reuniao():
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
+
 
 # No seu arquivo app.py, localize a rota 'comunicados' e altere-a
 @app.route('/comunicados', methods=['GET', 'POST'])
@@ -1130,66 +1155,8 @@ def excluir_reuniao(reuniao_id):
 
 
 
-# --- ATENÇÃO: Rota de teste temporária! Remova após o uso. ---
-import smtplib
-
-@app.route('/testemail')
-def test_email_route():
-    # Pega as credenciais do ambiente
-    MAIL_SERVER = os.getenv('MAIL_SERVER')
-    MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
-    MAIL_USERNAME = os.getenv('MAIL_USERNAME')
-    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
-    MAIL_SENDER = os.getenv('MAIL_DEFAULT_SENDER')
-
-    # --- Coloque seu e-mail pessoal aqui para receber o teste ---
-    RECIPIENT_EMAIL = 'diogodbm9@gmail.com'
-    # -----------------------------------------------------------
-
-    output = []
-    output.append("--- INICIANDO TESTE DE E-MAIL ---")
-    output.append(f"Servidor: {MAIL_SERVER}:{MAIL_PORT}")
-    output.append(f"Usuário: {MAIL_USERNAME}")
-    output.append(f"Remetente: {MAIL_SENDER}")
-
-    if not all([MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_SENDER]):
-        output.append("\n[ERRO] Variáveis de ambiente faltando!")
-        return "<br>".join(output)
-
-    server = None
-    try:
-        output.append("\n1. Conectando ao servidor SMTP...")
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=20)
-        output.append("2. Iniciando TLS...")
-        server.starttls()
-        output.append("3. Fazendo login...")
-        server.login(MAIL_USERNAME, MAIL_PASSWORD)
-        output.append("4. Enviando e-mail...")
-        
-        subject = "Teste de Conexão CondoIQ - Render"
-        body = "A conexão com o SendGrid via rota Flask está funcionando!"
-        message = f"Subject: {subject}\n\n{body}"
-        server.sendmail(MAIL_SENDER, RECIPIENT_EMAIL, message)
-        
-        output.append("\n[SUCESSO] E-mail enviado com sucesso!")
-
-    except smtplib.SMTPAuthenticationError as e:
-        output.append(f"\n[ERRO DE AUTENTICAÇÃO] {e}")
-        output.append("-> Causa: 'MAIL_PASSWORD' (API Key) está incorreta.")
-    except Exception as e:
-        output.append(f"\n[ERRO INESPERADO] {e}")
-    finally:
-        if server:
-            output.append("\n5. Fechando conexão.")
-            server.quit()
-        output.append("--- TESTE FINALIZADO ---")
-
-    # Retorna o resultado no navegador
-    return "<pre>" + "\n".join(output) + "</pre>"
-# ---------------- Fim da rota de teste --------------------
-
-
 # Execução local (produção: gunicorn)
 if __name__ == '__main__':
 
     app.run(debug=True)
+
