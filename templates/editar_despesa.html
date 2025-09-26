@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Despesa - CondoIQ{% endblock %}
+{% block page_title %}Editar Despesa{% endblock %}
+
+{% block content %}
+<section style="background: var(--card); box-shadow: var(--shadow); border-radius: var(--radius); padding: 16px;">
+  <form method="POST" action="{{ url_for('editar_despesa', despesa_id=d.id) }}"
+        style="display:grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap:12px; align-items:end;">
+    <!-- Descrição -->
+    <div>
+      <label for="descricao" style="display:block; font-weight:600; font-size:14px; color:var(--muted);">Descrição</label>
+      <input type="text" id="descricao" name="descricao" required
+             value="{{ d.descricao }}"
+             style="padding:10px; border:1px solid var(--line); border-radius:6px; width:100%;">
+    </div>
+
+    <!-- Valor -->
+    <div>
+      <label for="valor" style="display:block; font-weight:600; font-size:14px; color:var(--muted);">Valor (R$)</label>
+      <input type="number" id="valor" name="valor" step="0.01" min="0" required
+             value="{{ '%.2f'|format((d.valor or 0)|float) }}"
+             style="padding:10px; border:1px solid var(--line); border-radius:6px; width:100%;">
+    </div>
+
+    <!-- Data -->
+    <div>
+      <label for="data" style="display:block; font-weight:600; font-size:14px; color:var(--muted);">Data</label>
+      <input type="date" id="data" name="data" required
+             value="{{ d.data.strftime('%Y-%m-%d') if d.data else '' }}"
+             style="padding:10px; border:1px solid var(--line); border-radius:6px; width:100%;">
+    </div>
+
+    <!-- Categoria -->
+    <div>
+      <label for="categoria" style="display:block; font-weight:600; font-size:14px; color:var(--muted);">Categoria</label>
+      <select id="categoria" name="categoria" required
+              style="padding:10px; border:1px solid var(--line); border-radius:6px; width:100%;">
+        {% set _categorias = categorias if categorias is defined and categorias else ['Água','Energia','Manutenção','Limpeza','Pessoal','Outros'] %}
+        {% for c in _categorias %}
+          <option value="{{ c }}" {% if d.categoria == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Ações -->
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <a href="{{ url_for('despesas') }}" class="btn btn-ghost" style="height:42px; line-height:42px;">Cancelar</a>
+      <button type="submit" class="btn btn-primary" style="height:42px;">Salvar</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
