@@ -21,10 +21,6 @@ from sendgrid.helpers.mail import Mail as SGMail
 load_dotenv()
 
 # ============================================
-# BANCO DE DADOS (Configuração Local)
-# ============================================
-
-# ============================================
 # BANCO DE DADOS
 # ============================================
 
@@ -1154,9 +1150,111 @@ def excluir_reuniao(reuniao_id):
     return redirect(url_for('dashboard'))
 
 
+# listar/adicionar
+@app.route('/despesas', methods=['GET','POST'])
+@login_required
+def despesas():
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)  # se quiser restringir só a síndico. Se todos podem ver, remova.
+
+        # POST: criar
+        if request.method == 'POST':
+            descricao = request.form.get('descricao')
+            valor = request.form.get('valor', type=float)
+            data  = request.form.get('data')
+            categoria = request.form.get('categoria')
+
+            if not all([descricao, valor is not None, data, categoria]):
+                flash('Preencha todos os campos.', 'error')
+                return redirect(url_for('despesas'))
+
+            d = Despesa(
+                descricao=descricao,
+                valor=int(round(valor, 2)),  # se seu modelo usa Integer. Se for Decimal/Float, ajuste.
+                data=datetime.datetime.strptime(data, '%Y-%m-%d').date(),
+                categoria=categoria,
+                condominio_id=usuario_ativo.condominio_id
+            )
+            session_db.add(d)
+            session_db.commit()
+            flash('Despesa adicionada.', 'success')
+            return redirect(url_for('despesas'))
+
+        # GET: filtros
+        q = session_db.query(Despesa).filter_by(condominio_id=usuario_ativo.condominio_id)
+
+        comp = request.args.get('competencia')  # YYYY-MM
+        if comp:
+            ano, mes = comp.split('-')
+            q = q.filter(
+                Despesa.data >= datetime.date(int(ano), int(mes), 1),
+                Despesa.data <  (datetime.date(int(ano), int(mes), 1) + datetime.timedelta(days=32)).replace(day=1)
+            )
+
+        cat = request.args.get('categoria')
+        if cat:
+            q = q.filter(Despesa.categoria == cat)
+
+        despesas = q.order_by(Despesa.data.desc()).all()
+
+        categorias = ['Água', 'Energia', 'Manutenção', 'Limpeza', 'Pessoal', 'Outros']  # personalize
+
+        return render_template('despesas.html', despesas=despesas, categorias=categorias)
+    finally:
+        session_db.close()
+
+# excluir
+@app.route('/despesas/excluir/<int:despesa_id>', methods=['POST'])
+@login_required
+def excluir_despesa(despesa_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+        d = session_db.get(Despesa, despesa_id)
+        if not d or d.condominio_id != usuario_ativo.condominio_id:
+            flash('Despesa não encontrada.', 'error')
+            return redirect(url_for('despesas'))
+        session_db.delete(d)
+        session_db.commit()
+        flash('Despesa excluída.', 'success')
+        return redirect(url_for('despesas'))
+    finally:
+        session_db.close()
+
+# editar (página simples)
+@app.route('/despesas/editar/<int:despesa_id>', methods=['GET','POST'])
+@login_required
+def editar_despesa(despesa_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+        d = session_db.get(Despesa, despesa_id)
+        if not d or d.condominio_id != usuario_ativo.condominio_id:
+            flash('Despesa não encontrada.', 'error')
+            return redirect(url_for('despesas'))
+
+        if request.method == 'POST':
+            d.descricao = request.form.get('descricao')
+            d.valor = int(round(request.form.get('valor', type=float), 2))
+            d.data = datetime.datetime.strptime(request.form.get('data'), '%Y-%m-%d').date()
+            d.categoria = request.form.get('categoria')
+            session_db.commit()
+            flash('Despesa atualizada.', 'success')
+            return redirect(url_for('despesas'))
+
+        categorias = ['Água', 'Energia', 'Manutenção', 'Limpeza', 'Pessoal', 'Outros']
+        return render_template('editar_despesa.html', d=d, categorias=categorias)
+    finally:
+        session_db.close()
+
 
 # Execução local (produção: gunicorn)
 if __name__ == '__main__':
 
     app.run(debug=True)
+
 
