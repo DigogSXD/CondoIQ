@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Despesas - CondoIQ{% endblock %}
+{% block page_title %}Despesas{% endblock %}
+
+{% block content %}
+  <!-- Painel de filtros / resumo -->
+  <section style="background: var(--card); box-shadow: var(--shadow); border-radius: var(--radius); padding: 16px; margin-bottom: 20px;">
+    <form method="GET" action="{{ url_for('despesas') }}" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label for="competencia" style="display:block; font-weight:600; font-size:14px; color:var(--muted);">Mês/Ano</label>
+        <input type="month" id="competencia" name="competencia" value="{{ request.args.get('competencia','') }}" style="padding:10px; border:1px solid var(--line); border-radius:6px;">
+      </div>
+      <div>
+        <label for="categoria" style="display:block; font-weight:600; font-size:14px; color:var(--muted);">Categoria</label>
+        <select id="categoria" name="categoria" style="padding:10px; border:1px solid var(--line); border-radius:6px;">
+          <option value="">Todas</option>
+          {% for c in categorias or [] %}
+            <option value="{{ c }}" {% if request.args.get('categoria') == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <button class="btn btn-ghost" type="submit">Filtrar</button>
+        <a class="btn btn-ghost" href="{{ url_for('despesas') }}">Limpar</a>
+      </div>
+
+      <div style="margin-left:auto; display:flex; gap:12px; align-items:center;">
+        {% set ns = namespace(total=0) %}
+        {% for d in despesas or [] %}
+          {% set ns.total = ns.total + (d.valor or 0) %}
+        {% endfor %}
+        <span class="badge-count">Total do período: R$ {{ "%.2f"|format(ns.total|float) }}</span>
+        <span class="badge-count">Registros: {{ (despesas or [])|length }}</span>
+      </div>
+    </form>
+  </section>
+
+  {% if current_user.is_authenticated and current_user.tipo == 0 %}
+  <!-- Formulário de nova despesa (apenas síndico) -->
+  <section style="background: var(--card); box-shadow: var(--shadow); border-radius: var(--radius); padding: 16px; margin-bottom: 20px;">
+    <h3 style="margin:0 0 12px 0;">Adicionar Despesa</h3>
+    <form method="POST" action="{{ url_for('despesas') }}" style="display:grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap:12px;">
+      <input type="text" name="descricao" placeholder="Descrição" required
+             style="padding:10px; border:1px solid var(--line); border-radius:6px;">
+      <input type="number" name="valor" step="0.01" min="0" placeholder="Valor (R$)" required
+             style="padding:10px; border:1px solid var(--line); border-radius:6px;">
+      <input type="date" name="data" value="{{ request.args.get('data','') or '' }}" required
+             style="padding:10px; border:1px solid var(--line); border-radius:6px;">
+      <select name="categoria" required style="padding:10px; border:1px solid var(--line); border-radius:6px;">
+        <option value="" disabled selected>Categoria</option>
+        {% for c in categorias or [] %}
+          <option value="{{ c }}">{{ c }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-primary" type="submit">Salvar</button>
+    </form>
+    <p style="font-size:12px; color:var(--muted); margin-top:8px;">
+      Dica: use valores com duas casas decimais (ex.: 1200.50).
+    </p>
+  </section>
+  {% endif %}
+
+  <!-- Tabela das despesas -->
+  <section style="background: var(--card); box-shadow: var(--shadow); border-radius: var(--radius); padding: 0; overflow:hidden;">
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse;">
+        <thead style="background:#f9fafb; border-bottom:1px solid var(--line);">
+          <tr>
+            <th style="text-align:left; padding:12px; font-size:13px; color:var(--muted);">Data</th>
+            <th style="text-align:left; padding:12px; font-size:13px; color:var(--muted);">Descrição</th>
+            <th style="text-align:left; padding:12px; font-size:13px; color:var(--muted);">Categoria</th>
+            <th style="text-align:right; padding:12px; font-size:13px; color:var(--muted);">Valor (R$)</th>
+            {% if current_user.is_authenticated and current_user.tipo == 0 %}
+              <th style="text-align:right; padding:12px; font-size:13px; color:var(--muted);">Ações</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% if despesas and despesas|length %}
+            {% for d in despesas %}
+              <tr style="border-bottom:1px solid var(--line);">
+                <td style="padding:12px;">{{ d.data.strftime('%d/%m/%Y') if d.data else '-' }}</td>
+                <td style="padding:12px;">{{ d.descricao }}</td>
+                <td style="padding:12px;">{{ d.categoria }}</td>
+                <td style="padding:12px; text-align:right;">{{ "%.2f"|format((d.valor or 0)|float) }}</td>
+                {% if current_user.is_authenticated and current_user.tipo == 0 %}
+                  <td style="padding:12px; text-align:right; white-space:nowrap;">
+                    <a class="btn btn-ghost" href="{{ url_for('editar_despesa', despesa_id=d.id) }}">Editar</a>
+                    <form method="POST" action="{{ url_for('excluir_despesa', despesa_id=d.id) }}"
+                          style="display:inline-block;"
+                          onsubmit="return confirm('Excluir esta despesa?');">
+                      <button class="btn btn-danger" type="submit">Excluir</button>
+                    </form>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" style="padding:16px; text-align:center; color:var(--muted);">
+                Nenhuma despesa encontrada para os filtros atuais.
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+        {% if despesas and despesas|length %}
+          <tfoot>
+            <tr>
+              <td colspan="3" style="padding:12px; font-weight:700; text-align:right; border-top:1px solid var(--line);">
+                Total
+              </td>
+              <td style="padding:12px; font-weight:700; text-align:right; border-top:1px solid var(--line);">
+                {{ "%.2f"|format(ns.total|float) }}
+              </td>
+              {% if current_user.is_authenticated and current_user.tipo == 0 %}
+                <td style="border-top:1px solid var(--line);"></td>
+              {% endif %}
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+  </section>
+{% endblock %}

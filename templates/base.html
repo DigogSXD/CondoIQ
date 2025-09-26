@@ -231,6 +231,9 @@
                     <li class="{% if request.endpoint == 'gerenciar_usuarios' %}active{% endif %}">
                         <a href="{{ url_for('gerenciar_usuarios') }}"><span class="icon">⚙️</span> <span>Gerenciar Usuários</span></a>
                     </li>
+                    <li class="{% if request.endpoint in ['despesas', 'editar_despesa'] %}active{% endif %}">
+                    <a href="{{ url_for('despesas') }}"><span class="icon">💸</span> <span>Despesas</span></a>
+                    </li>
                     {% else %}
                     <li class="{% if request.endpoint == 'abrir_reclamacao' %}active{% endif %}">
                         <a href="{{ url_for('abrir_reclamacao') }}"><span class="icon">📝</span> <span>Abrir Reclamação</span></a>
@@ -238,6 +241,7 @@
                     <li class="{% if request.endpoint == 'minhas_reclamacoes' %}active{% endif %}">
                         <a href="{{ url_for('minhas_reclamacoes') }}"><span class="icon">📋</span> <span>Minhas Reclamações</span></a>
                     </li>
+
                     {% endif %}
                 </ul>
             </nav>
