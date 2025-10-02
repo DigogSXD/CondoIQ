@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>{% block title %}CondoIQ{% endblock %}</title>
     <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
+     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
         /* Estilos genéricos para o layout */
@@ -213,33 +214,34 @@
             <nav>
                 <ul>
                     <li class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
-                        <a href="{{ url_for('dashboard') }}"><span class="icon">🏠</span> <span>Home</span></a>
+                        <a href="{{ url_for('dashboard') }}"><i class="fas fa-home icon-style"></i> <span>Home</span>
+                        </a>
                     </li>
                     {% if current_user.tipo == 0 %}
                     <li class="{% if request.endpoint == 'moradores_pendentes' %}active{% endif %}">
-                        <a href="{{ url_for('moradores_pendentes') }}"><span class="icon">👥</span> <span>Moradores Pendentes</span></a>
+                        <a href="{{ url_for('moradores_pendentes') }}">"><i class="fas fa-users icon-style mb-3"></i> <span>Moradores Pendentes</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'lista_reclamacoes_sindico' %}active{% endif %}">
-                        <a href="{{ url_for('lista_reclamacoes_sindico') }}"><span class="icon">💬</span> <span>Reclamações</span></a>
+                        <a href="{{ url_for('lista_reclamacoes_sindico') }}"><i class="fa-solid fa-comment"></i> <span>Reclamações</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'agendar_reuniao' %}active{% endif %}">
-                        <a href="{{ url_for('agendar_reuniao') }}"><span class="icon">📅</span> <span>Agendar Reunião</span></a>
+                        <a href="{{ url_for('agendar_reuniao') }}">"><i class="fas fa-calendar-alt icon-style"></i> <span>Agendar Reunião</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'comunicados' %}active{% endif %}">
-                        <a href="{{ url_for('comunicados') }}"><span class="icon">📢</span> <span>Comunicados</span></a>
+                        <a href="{{ url_for('comunicados') }}"><i class="fa-solid fa-bullhorn"></i> <span>Comunicados</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'gerenciar_usuarios' %}active{% endif %}">
-                        <a href="{{ url_for('gerenciar_usuarios') }}"><span class="icon">⚙️</span> <span>Gerenciar Usuários</span></a>
+                        <a href="{{ url_for('gerenciar_usuarios') }}"><i class="fa-solid fa-gear"></i> <span>Gerenciar Usuários</span></a>
                     </li>
                     <li class="{% if request.endpoint in ['despesas', 'editar_despesa'] %}active{% endif %}">
-                    <a href="{{ url_for('despesas') }}"><span class="icon">💸</span> <span>Despesas</span></a>
+                    <a href="{{ url_for('despesas') }}"><i class="fa-solid fa-sack-dollar"></i> <span>Despesas</span></a>
                     </li>
                     {% else %}
                     <li class="{% if request.endpoint == 'abrir_reclamacao' %}active{% endif %}">
-                        <a href="{{ url_for('abrir_reclamacao') }}"><span class="icon">📝</span> <span>Abrir Reclamação</span></a>
+                        <a href="{{ url_for('abrir_reclamacao') }}"><i class="fa-solid fa-pen-to-square"></i> <span>Abrir Reclamação</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'minhas_reclamacoes' %}active{% endif %}">
-                        <a href="{{ url_for('minhas_reclamacoes') }}"><span class="icon">📋</span> <span>Minhas Reclamações</span></a>
+                        <a href="{{ url_for('minhas_reclamacoes') }}"><i class="fa-light fa-clipboard-list"></i> <span>Minhas Reclamações</span></a>
                     </li>
 
                     {% endif %}
