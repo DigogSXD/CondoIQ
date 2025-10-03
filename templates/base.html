@@ -219,13 +219,13 @@
                     </li>
                     {% if current_user.tipo == 0 %}
                     <li class="{% if request.endpoint == 'moradores_pendentes' %}active{% endif %}">
-                        <a href="{{ url_for('moradores_pendentes') }}">"><i class="fas fa-users icon-style mb-3"></i> <span>Moradores Pendentes</span></a>
+                        <a href="{{ url_for('moradores_pendentes') }}"><i class="fas fa-users icon-style mb-3"></i> <span>Moradores Pendentes</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'lista_reclamacoes_sindico' %}active{% endif %}">
                         <a href="{{ url_for('lista_reclamacoes_sindico') }}"><i class="fa-solid fa-comment"></i> <span>Reclamações</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'agendar_reuniao' %}active{% endif %}">
-                        <a href="{{ url_for('agendar_reuniao') }}">"><i class="fas fa-calendar-alt icon-style"></i> <span>Agendar Reunião</span></a>
+                        <a href="{{ url_for('agendar_reuniao') }}"><i class="fas fa-calendar-alt icon-style"></i> <span>Agendar Reunião</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'comunicados' %}active{% endif %}">
                         <a href="{{ url_for('comunicados') }}"><i class="fa-solid fa-bullhorn"></i> <span>Comunicados</span></a>
@@ -286,4 +286,5 @@
         });
     </script>
 </body>
+
 </html>
