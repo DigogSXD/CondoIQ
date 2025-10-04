@@ -1,37 +1,48 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cadastro - Condomínio Aquarela</title>
-  <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
-  <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro - Condomínio Aquarela</title>
+    <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
+    
+    <style>
+        .flash-container { margin-bottom: 14px; }
+        .flash { padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
+        .flash.success { background: #ecfdf5; border: 1px solid #34d399; color:#065f46; }
+        .flash.error   { background: #fef2f2; border: 1px solid #f87171; color:#7f1d1d; }
+        .flash.warning { background: #fffbeb; border: 1px solid #fbbf24; color:#7c2d12; }
+        .inline-msg { margin-bottom: 12px; background: #fffbeb; border: 1px solid #fbbf24; color:#7c2d12; padding: 10px 12px; border-radius: 6px; font-size: 14px; }
+    </style>
+    
 </head>
 <body class="auth-body">
-  <div class="auth-container">
-    <div class="auth-box">
-      <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquareela" class="auth-logo">
-      <h2>Cadastro</h2>
+    <div class="auth-container">
+        <div class="auth-box">
+            <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquareela" class="auth-logo">
+            <h2>Cadastro</h2>
 
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <ul class="flashes">
-            {% for category, message in messages %}
-              <li class="{{ category }}">{{ message }}</li>
-            {% endfor %}
-          </ul>
-        {% endif %}
-      {% endwith %}
-      <form method="POST" action="{{ url_for('register') }}">
-        <input type="text" name="nome" placeholder="Nome completo" required>
-        <input type="email" name="email" placeholder="E-mail" required>
-        <input type="password" name="senha" placeholder="Senha" required>
-        <button type="submit" class="auth-btn">Cadastrar</button>
-      </form>
-      <p class="auth-text">
-        Já tem conta? <a href="{{ url_for('login') }}">Faça login</a>
-      </p>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container">
+                        {% for category, message in messages %}
+                            <div class="flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST" action="{{ url_for('register') }}">
+                <input type="text" name="nome" placeholder="Nome completo" required>
+                <input type="email" name="email" placeholder="E-mail" required>
+                <input type="password" name="senha" placeholder="Senha" required>
+                <button type="submit" class="auth-btn">Cadastrar</button>
+            </form>
+            <p class="auth-text">
+                Já tem conta? <a href="{{ url_for('login') }}">Faça login</a>
+            </p>
+        </div>
     </div>
-  </div>
 </body>
 </html>
