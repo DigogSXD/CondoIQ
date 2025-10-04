@@ -12,6 +12,16 @@
     <div class="auth-box">
       <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquareela" class="auth-logo">
       <h2>Cadastro</h2>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <ul class="flashes">
+            {% for category, message in messages %}
+              <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% endwith %}
       <form method="POST" action="{{ url_for('register') }}">
         <input type="text" name="nome" placeholder="Nome completo" required>
         <input type="email" name="email" placeholder="E-mail" required>
