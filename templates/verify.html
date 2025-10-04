@@ -6,18 +6,78 @@
   <title>Verificação - Condomínio Aquarela</title>
   <link rel="icon" href="{{ url_for('static', filename='imagens/logo.png') }}" type="image/png">
   <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
+  <style>
+    /* mesmo visual das mensagens do login */
+    .flash-container { margin-bottom: 14px; }
+    .flash { padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
+    .flash.success { background: #ecfdf5; border: 1px solid #34d399; color:#065f46; }
+    .flash.error   { background: #fef2f2; border: 1px solid #f87171; color:#7f1d1d; }
+    .flash.warning { background: #fffbeb; border: 1px solid #fbbf24; color:#7c2d12; }
+
+    .hint { font-size: 14px; color:#374151; margin-bottom: 12px; }
+    .code-badge { display:inline-block; padding:6px 10px; border:1px dashed #9ca3af; border-radius:6px; font-family:monospace; }
+    .actions { display:flex; gap:10px; align-items:center; justify-content:space-between; margin-top:10px; }
+    .link-btn { background:none; border:none; color:#2563eb; cursor:pointer; padding:0; font-size:14px; text-decoration:underline; }
+  </style>
 </head>
 <body class="auth-body">
   <div class="auth-container">
     <div class="auth-box">
       <img src="{{ url_for('static', filename='imagens/logo_azul.png') }}" alt="Logo Aquarela" class="auth-logo">
       <h2>Verificação</h2>
-      <p>Um código de verificação foi enviado para o seu e-mail. Por favor, insira-o abaixo.</p>
+
+      <!-- Mensagens via flash -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-container">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% if email %}
+        <p class="hint">Enviamos um código para <strong>{{ email }}</strong>. Verifique a caixa de entrada e o spam.</p>
+      {% else %}
+        <p class="hint">Enviamos um código para o seu e-mail. Insira-o abaixo.</p>
+      {% endif %}
+
+      {% if show_verification_code %}
+        <!-- Modo teste: mostra o código na tela -->
+        <p class="hint">Código (teste): <span class="code-badge">{{ show_verification_code }}</span></p>
+      {% endif %}
+
       <form method="POST" action="{{ url_for('register', step='verify') }}">
-        <input type="text" name="codigo" placeholder="Código de verificação" required>
-        <button type="submit" class="auth-btn">Verificar</button>
+        <input type="text" name="codigo" placeholder="Código de verificação" autocomplete="one-time-code" required>
+        <div class="actions">
+          <button type="submit" class="auth-btn">Verificar</button>
+
+          <!-- Reenvio opcional (ver rota abaixo) -->
+          <form method="POST" action="{{ url_for('register', step='verify') }}">
+            <input type="hidden" name="action" value="resend">
+            <button class="link-btn" type="submit">Reenviar código</button>
+          </form>
+        </div>
       </form>
+
+      <p class="auth-text" style="margin-top:12px;">
+        Digitou o e-mail errado? <a href="{{ url_for('register') }}">Voltar ao cadastro</a>
+      </p>
     </div>
   </div>
+
+  <script>
+    // auto foco no input do código
+    document.querySelector('input[name="codigo"]')?.focus();
+    // permite colar 6 dígitos direto
+    document.addEventListener('paste', (e) => {
+      const t = e.clipboardData?.getData('text') || '';
+      const inp = document.querySelector('input[name="codigo"]');
+      if (inp && /^\s*[A-Za-z0-9]{4,12}\s*$/.test(t)) { // aceita hex curto/6+ etc.
+        e.preventDefault(); inp.value = t.trim();
+      }
+    });
+  </script>
 </body>
 </html>

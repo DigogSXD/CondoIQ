@@ -310,31 +310,44 @@ def home():
 def register():
     step = request.values.get('step')
     session_db = Session()
-    if request.method == 'POST':
-        nome = request.form.get('nome')
-        email = request.form.get('email')
-        senha = request.form.get('senha')
-        codigo = request.form.get('codigo')
-        try:
-            if step != 'verify':
-                if not nome or not email or not senha:
-                    flash('Todos os campos são obrigatórios!', 'error')
-                    return redirect(url_for('register'))
-                if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-                    flash('Email inválido!', 'error')
-                    return redirect(url_for('register'))
-                if len(senha) < 8:
-                    flash('A senha deve ter pelo menos 8 caracteres!', 'error')
-                    return redirect(url_for('register'))
-                if session_db.query(Usuario).filter_by(email=email).first():
-                    flash('Email já cadastrado!', 'error')
-                    return redirect(url_for('register'))
 
+    try:
+        if request.method == 'POST':
+            nome   = request.form.get('nome', '').strip()
+            email  = request.form.get('email', '').strip().lower()
+            senha  = request.form.get('senha', '')
+            codigo = request.form.get('codigo', '')
+
+            # ===================== ETAPA 1: dados básicos ======================
+            if step != 'verify':
+                errors = {}
+
+                if not nome:
+                    errors['nome'] = 'Informe seu nome completo.'
+                if not email:
+                    errors['email'] = 'Informe um e-mail.'
+                elif not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+                    errors['email'] = 'E-mail inválido.'
+                if not senha:
+                    errors['senha'] = 'Informe uma senha.'
+                elif len(senha) < 8:
+                    errors['senha'] = 'A senha deve ter pelo menos 8 caracteres.'
+
+                if not errors:
+                    if session_db.query(Usuario).filter_by(email=email).first():
+                        errors['email'] = 'E-mail já cadastrado.'
+
+                if errors:
+                    # Erros inline + um flash geral
+                    flash('Corrija os campos destacados e tente novamente.', 'error')
+                    # Render direto para manter os valores do form (sem redirect)
+                    return render_template('register.html', errors=errors)
+
+                # OK: gera código, salva pendência na sessão e envia e-mail
                 verification_code = secrets.token_hex(3)
                 session['verification_code'] = verification_code
                 session['pending_registration'] = {'nome': nome, 'email': email, 'senha': senha}
 
-                # === ALTERAÇÃO: envio assíncrono (não bloqueia o worker) ===
                 send_email(
                     'Código de Verificação - CondoIQ',
                     [email],
@@ -342,20 +355,28 @@ def register():
                     async_send=True
                 )
 
-                # Em modo teste, mostrar o código na tela de verificação
                 if ALLOW_REGISTER_WITHOUT_EMAIL:
                     app.logger.warning(f'EMAIL NÃO ENVIADO (modo teste). Código: {verification_code}')
                     session['show_verification_code'] = verification_code
 
-                flash('Um código de verificação foi enviado. Se não chegar em alguns minutos, peça reenvio.', 'success')
+                flash('Enviamos um código de verificação para o seu e-mail.', 'success')
                 return redirect(url_for('register', step='verify'))
 
+            # ===================== ETAPA 2: verificação de código =================
             else:
                 if not codigo or codigo != session.get('verification_code'):
                     flash('Código de verificação inválido!', 'error')
-                    return redirect(url_for('register', step='verify'))
+                    # Renderiza verify.html para manter o que for preciso
+                    return render_template('verify.html',
+                                           show_verification_code=session.get('show_verification_code'),
+                                           email=session.get('pending_registration', {}).get('email'))
 
-                hashed_senha = bcrypt.hashpw(session['pending_registration']['senha'].encode('utf-8'), bcrypt.gensalt())
+                # Cria usuário
+                hashed_senha = bcrypt.hashpw(
+                    session['pending_registration']['senha'].encode('utf-8'),
+                    bcrypt.gensalt()
+                )
+
                 condominio_existente = session_db.query(Condominio).first()
                 if not condominio_existente:
                     novo_usuario = Usuario(
@@ -385,6 +406,7 @@ def register():
                 session_db.add(novo_usuario)
                 session_db.commit()
 
+                # limpa sessão
                 session.pop('verification_code', None)
                 session.pop('pending_registration', None)
                 session.pop('show_verification_code', None)
@@ -392,18 +414,25 @@ def register():
                 flash('Registro concluído! Aguarde aprovação do síndico.', 'success')
                 return redirect(url_for('login'))
 
-        except Exception as e:
-            session_db.rollback()
-            app.logger.exception(f'Erro no registro: {e}')
-            flash(f'Erro ao processar registro: {str(e)}', 'error')
-            return redirect(url_for('register', step=step))
-        finally:
-            session_db.close()
+        # ===================== GET ======================
+        if step == 'verify':
+            return render_template('verify.html',
+                                   show_verification_code=session.get('show_verification_code'),
+                                   email=session.get('pending_registration', {}).get('email'))
+        return render_template('register.html', errors=None)
 
-    if step == 'verify':
-        return render_template('verify.html')
-    return render_template('register.html')
-
+    except Exception as e:
+        session_db.rollback()
+        app.logger.exception(f'Erro no registro: {e}')
+        flash(f'Erro ao processar registro: {str(e)}', 'error')
+        # volta para a tela adequada mantendo contexto
+        if step == 'verify':
+            return render_template('verify.html',
+                                   show_verification_code=session.get('show_verification_code'),
+                                   email=session.get('pending_registration', {}).get('email'))
+        return render_template('register.html')
+    finally:
+        session_db.close()
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
