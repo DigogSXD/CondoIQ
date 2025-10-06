@@ -3,11 +3,31 @@
 {% block title %}Abrir Portão{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mt-4">🚪 Abrir Portão</h1>
-    <p class="lead">Pressione o botão para enviar o comando de abertura do portão do condomínio.</p>
+<style>
+    /* Estilo para alinhar o conteúdo verticalmente */
+    .content-wrapper {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between; /* Empurra o conteúdo para as extremidades */
+        height: 100%; /* Ocupa toda a altura disponível */
+    }
+    .main-text {
+        text-align: center;
+        margin-top: 4rem; /* Adiciona um espaço no topo para o texto */
+    }
+    .gate-button-container {
+        text-align: center;
+        margin-bottom: 2rem; /* Adiciona espaço na parte inferior */
+    }
+</style>
 
-    <div class="text-center mt-5">
+<div class="content-wrapper">
+    <div class="main-text">
+        <h1 class="mt-4">🚪 Abrir Portão</h1>
+        <p class="lead">Pressione o botão para enviar o comando de abertura do portão do condomínio.</p>
+    </div>
+
+    <div class="gate-button-container">
         <form method="POST" action="{{ url_for('abrir_portao') }}">
             <button type="submit" class="btn btn-success btn-lg" style="padding: 2rem 4rem;">
                 Abrir Portão
