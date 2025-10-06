@@ -303,14 +303,19 @@ def requer_sindico(usuario_ativo):
 # ============================================
 # ROTAS PARA CONTROLE DE PORTÃO
 # ============================================
+
+
+USUARIOS_AUTORIZADOS_PORTAO = ['diogodbm9@gmail.com', 'Harley Moura ']
 @app.route('/abrir_portao', methods=['GET', 'POST'])
 @login_required
 def abrir_portao():
     session_db = Session()
     try:
         user = session_db.get(Usuario, current_user.id)
-        if user.tipo not in [TIPO_SINDICO, TIPO_MORADOR]:
-            flash('Acesso negado. Apenas síndicos e moradores podem abrir o portão.', 'error')
+        
+        # Lógica de verificação simples
+        if user.nome not in USUARIOS_AUTORIZADOS_PORTAO:
+            flash('Acesso negado. Você não tem permissão para abrir o portão.', 'error')
             return redirect(url_for('dashboard'))
 
         if request.method == 'POST':
@@ -545,7 +550,7 @@ def logout():
     flash('Você saiu da sua conta.', 'success')
     return redirect(url_for('home'))
 
-# No app.py, na rota /dashboard:
+
 # No app.py, na rota /dashboard:
 @app.route('/dashboard')
 @login_required
