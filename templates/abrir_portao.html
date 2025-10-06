@@ -8,16 +8,13 @@
     .content-wrapper {
         display: flex;
         flex-direction: column;
-        justify-content: space-between; /* Empurra o conteúdo para as extremidades */
-        height: 100%; /* Ocupa toda a altura disponível */
+        align-items: center; /* Centraliza horizontalmente o conteúdo */
+        justify-content: center; /* Centraliza verticalmente o conteúdo */
+        height: 100%;
     }
     .main-text {
         text-align: center;
-        margin-top: 4rem; /* Adiciona um espaço no topo para o texto */
-    }
-    .gate-button-container {
-        text-align: center;
-        margin-bottom: 2rem; /* Adiciona espaço na parte inferior */
+        margin-bottom: 2rem; /* Adiciona um espaço entre o texto e o botão */
     }
 </style>
 
@@ -27,7 +24,7 @@
         <p class="lead">Pressione o botão para enviar o comando de abertura do portão do condomínio.</p>
     </div>
 
-    <div class="gate-button-container">
+    <div>
         <form method="POST" action="{{ url_for('abrir_portao') }}">
             <button type="submit" class="btn btn-success btn-lg" style="padding: 2rem 4rem;">
                 Abrir Portão
