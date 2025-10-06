@@ -18,6 +18,7 @@ from threading import Thread
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail as SGMail
 
+import open_gate
 load_dotenv()
 
 # ============================================
@@ -297,6 +298,34 @@ def send_email(subject: str, recipients: list[str], body: str, html: str | None 
 def requer_sindico(usuario_ativo):
     if not usuario_ativo or usuario_ativo.tipo != TIPO_SINDICO:
         abort(403)
+
+
+# ============================================
+# ROTAS PARA CONTROLE DE PORTÃO
+# ============================================
+@app.route('/abrir_portao', methods=['GET', 'POST'])
+@login_required
+def abrir_portao():
+    session_db = Session()
+    try:
+        user = session_db.get(Usuario, current_user.id)
+        if user.tipo not in [TIPO_SINDICO, TIPO_MORADOR]:
+            flash('Acesso negado. Apenas síndicos e moradores podem abrir o portão.', 'error')
+            return redirect(url_for('dashboard'))
+
+        if request.method == 'POST':
+            result = open_gate.open_gate_tuya()
+            if result.get("success"):
+                flash('Comando para abrir o portão enviado com sucesso! 🎉', 'success')
+            else:
+                flash(f"Falha ao abrir o portão: {result.get('message', 'Erro desconhecido')}", 'error')
+            
+            return redirect(url_for('abrir_portao'))
+            
+        return render_template('abrir_portao.html', user=user)
+    finally:
+        session_db.close()
+
 
 # ============================================
 # ROTAS

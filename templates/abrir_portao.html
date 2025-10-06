@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Abrir Portão{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mt-4">🚪 Abrir Portão</h1>
+    <p class="lead">Pressione o botão para enviar o comando de abertura do portão do condomínio.</p>
+
+    <div class="text-center mt-5">
+        <form method="POST" action="{{ url_for('abrir_portao') }}">
+            <button type="submit" class="btn btn-success btn-lg" style="padding: 2rem 4rem;">
+                Abrir Portão
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

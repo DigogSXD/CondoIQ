@@ -245,6 +245,13 @@
                     </li>
 
                     {% endif %}
+                    
+                    {# Adicione a nova opção do menu aqui #}
+                    {% if current_user.tipo in [0, 2] %}
+                    <li class="{% if request.endpoint == 'abrir_portao' %}active{% endif %}">
+                        <a href="{{ url_for('abrir_portao') }}"><span class="icon">🚗</span> <span>Abrir Portão</span></a>
+                    </li>
+                    {% endif %}
                 </ul>
             </nav>
             {% endif %}
