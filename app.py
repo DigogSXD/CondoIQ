@@ -17,6 +17,8 @@ from sqlalchemy.exc import IntegrityError
 from threading import Thread
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail as SGMail
+# Aplicativo Mobile
+from flask import jsonify
 
 import open_gate
 load_dotenv()
@@ -330,8 +332,90 @@ def abrir_portao():
         return render_template('abrir_portao.html', user=user)
     finally:
         session_db.close()
+        
+# ============================================
+# ROTAS DA API PARA O APLICATIVO MOBILE
+# ============================================
+# Rota de API para realizar o login
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    # Pega os dados JSON enviados pelo app, em vez de um formulário
+    data = request.get_json()
+    if not data or not data.get('email') or not data.get('senha'):
+        return jsonify({"success": False, "message": "Email e senha são obrigatórios"}), 400
 
+    email = data.get('email')
+    senha = data.get('senha')
+    
+    session_db = Session()
+    try:
+        usuario = session_db.query(Usuario).filter_by(email=email).first()
 
+        # Mesma lógica de validação da sua rota de login original
+        if not usuario or not bcrypt.checkpw(senha.encode('utf-8'), usuario.senha.encode('utf-8')):
+            return jsonify({"success": False, "message": "Credenciais inválidas"}), 401 # 401 = Não Autorizado
+
+        if not usuario.is_ativo:
+            return jsonify({"success": False, "message": "Conta desativada"}), 403 # 403 = Proibido
+
+        if usuario.tipo == TIPO_PENDENTE:
+            return jsonify({"success": False, "message": "Cadastro pendente de aprovação"}), 403
+
+        # Se o login deu certo, loga o usuário na sessão e retorna sucesso com os dados do usuário
+        login_user(usuario)
+        
+        user_data = {
+            "id": usuario.id,
+            "nome": usuario.nome,
+            "email": usuario.email,
+            "tipo": usuario.tipo
+        }
+        
+        return jsonify({"success": True, "message": "Login bem-sucedido!", "user": user_data})
+
+    finally:
+        session_db.close()
+
+# Rota de API para buscar os dados do dashboard
+@app.route('/api/dashboard')
+@login_required # Garante que só um usuário logado pode acessar
+def api_dashboard():
+    session_db = Session()
+    try:
+        # A lógica é quase idêntica à sua rota de dashboard, mas formatamos para JSON
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        
+        if not usuario_ativo.condominio:
+            return jsonify({"error": "Usuário sem condomínio associado"}), 404
+
+        condominio_info = {
+            "id": usuario_ativo.condominio.id,
+            "nome": usuario_ativo.condominio.nome,
+            "endereco": usuario_ativo.condominio.endereco
+        }
+
+        # Buscando comunicados
+        comunicados_db = session_db.query(Comunicado).filter_by(condominio_id=usuario_ativo.condominio_id).order_by(Comunicado.data_postagem.desc()).all()
+        comunicados_json = [
+            {
+                "id": c.id, 
+                "titulo": c.titulo, 
+                "conteudo": c.conteudo, 
+                "data_postagem": c.data_postagem.isoformat()
+            } for c in comunicados_db
+        ]
+        
+        # O app pode usar essa resposta para construir a tela do dashboard
+        resposta = {
+            "condominio": condominio_info,
+            "comunicados": comunicados_json
+            # Você pode adicionar mais dados aqui (reuniões, despesas, etc.)
+        }
+        
+        return jsonify(resposta)
+        
+    finally:
+        session_db.close()
 # ============================================
 # ROTAS
 # ============================================
@@ -1290,5 +1374,6 @@ def editar_despesa(despesa_id):
 if __name__ == '__main__':
 
     app.run(debug=True)
+
 
 
