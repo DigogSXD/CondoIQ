@@ -336,7 +336,7 @@ def abrir_portao():
 # ============================================
 # ROTAS DA API PARA O APLICATIVO MOBILE
 # ============================================
-# Rota de API para realizar o login
+
 @app.route('/api/login', methods=['POST'])
 def api_login():
     # Pega os dados JSON enviados pelo app, em vez de um formulário
@@ -375,6 +375,14 @@ def api_login():
 
     finally:
         session_db.close()
+
+
+# Rota de API para realizar o logout
+@app.route('/api/logout', methods=['POST'])
+@login_required
+def api_logout():
+    logout_user()
+    return jsonify({"success": True, "message": "Logout bem-sucedido"})
 
 # Rota de API para buscar os dados do dashboard
 @app.route('/api/dashboard')
@@ -1374,6 +1382,3 @@ def editar_despesa(despesa_id):
 if __name__ == '__main__':
 
     app.run(debug=True)
-
-
-
