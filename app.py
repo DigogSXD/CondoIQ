@@ -384,6 +384,64 @@ def api_logout():
     logout_user()
     return jsonify({"success": True, "message": "Logout bem-sucedido"})
 
+@app.route('/api/abrir_portao', methods=['POST'])
+@login_required
+def api_abrir_portao():
+    session_db = Session()
+    try:
+        user = session_db.get(Usuario, current_user.id)
+        
+        # Sua lógica de verificação de permissão existente
+        if user.nome not in USUARIOS_AUTORIZADOS_PORTAO:
+            return jsonify({"success": False, "message": "Você não tem permissão para abrir o portão."}), 403
+
+        # Chama sua função que aciona o dispositivo Tuya
+        result = open_gate.open_gate_tuya()
+        
+        if result.get("success"):
+            return jsonify({"success": True, "message": "Comando para abrir o portão enviado!"})
+        else:
+            # Retorna a mensagem de erro específica do open_gate, se houver
+            error_message = result.get('message', 'Erro desconhecido ao contatar o dispositivo.')
+            return jsonify({"success": False, "message": error_message}), 500
+
+    except Exception as e:
+        app.logger.exception(f"Erro em /api/abrir_portao: {e}")
+        return jsonify({"success": False, "message": "Erro interno no servidor."}), 500
+    finally:
+        session_db.close()
+
+# NOVO: Rota de API para criar uma reclamação
+@app.route('/api/abrir_reclamacao', methods=['POST'])
+@login_required
+def api_abrir_reclamacao():
+    data = request.get_json()
+    titulo = data.get('titulo')
+    descricao = data.get('descricao')
+
+    if not titulo or not descricao:
+        return jsonify({"success": False, "message": "Título e descrição são obrigatórios."}), 400
+
+    session_db = Session()
+    try:
+        # Lógica para criar a reclamação no banco de dados
+        nova_reclamacao = Reclamacao(
+            titulo=titulo,
+            descricao=descricao,
+            usuario_id=current_user.id
+        )
+        session_db.add(nova_reclamacao)
+        session_db.commit()
+        
+        return jsonify({"success": True, "message": "Reclamação enviada com sucesso!"}), 201
+    except Exception as e:
+        session_db.rollback()
+        app.logger.exception(f"Erro em /api/abrir_reclamacao: {e}")
+        return jsonify({"success": False, "message": "Erro ao salvar a reclamação."}), 500
+    finally:
+        session_db.close()
+
+
 # Rota de API para buscar os dados do dashboard
 @app.route('/api/dashboard')
 @login_required # Garante que só um usuário logado pode acessar
