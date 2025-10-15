@@ -71,12 +71,18 @@ cd seu-repositorio
 
 ### 2. Crie e Ative um Ambiente Virtual
 # Para Linux/macOS
+```bash
 python3 -m venv venv
 source venv/bin/activate
+```
+
 
 # Para Windows
+```bash
 python -m venv venv
 .\venv\Scripts\activate
+```
+
 
 ### 3. Instale as Dependências
 requirements.txt com o conteúdo abaixo e execute o comando pip install.
@@ -140,6 +146,7 @@ https://dashboard.render.com/web/srv-d31gelu3jp1c73fsdu9g/events
 https://condoiq.onrender.com/login
 
 roda
+
 
 
 
