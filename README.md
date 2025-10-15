@@ -93,36 +93,10 @@ requirements.txt
 pip install -r requirements.txt
 ```
 
-### 4. Configure as Variáveis de Ambiente
-
-# Configuração do Banco de Dados
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=sua_senha_do_banco
-DB_NAME=condoiq_db
-DB_SSL=false
-
-Chave secreta do Flask (gere uma chave segura)
-SECRET_KEY='uma-chave-secreta-muito-forte-e-aleatoria'
-
-Configuração de E-mail (usando SendGrid)
-Deixe em branco se não for usar ou configure ALLOW_REGISTER_WITHOUT_EMAIL=true
-SENDGRID_API_KEY='sua_chave_de_api_do_sendgrid'
-MAIL_DEFAULT_SENDER='seu-email-verificado@sendgrid.com'
-
-Modo de Desenvolvimento
-Permite registrar usuários sem enviar e-mail de confirmação (útil para testes)
-ALLOW_REGISTER_WITHOUT_EMAIL=true
-
-### 5. Execute a Aplicação
-
-```bash
-python app.py
-```
 
 
-### 📡 Endpoints da API (para o App Mobile)
+
+### 4.📡 Endpoints da API (para o App Mobile)
 A API foi projetada para ser consumida por um aplicativo mobile, garantindo que os moradores tenham acesso às funcionalidades na palma da mão.
 
 POST /api/login: Autentica o usuário e retorna os dados do perfil.
@@ -146,6 +120,7 @@ https://dashboard.render.com/web/srv-d31gelu3jp1c73fsdu9g/events
 https://condoiq.onrender.com/login
 
 roda
+
 
 
 
