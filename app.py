@@ -3,7 +3,6 @@ from urllib.parse import quote_plus
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
-# ATUALIZAÇÃO: Adicionado UniqueConstraint
 from sqlalchemy import create_engine, Column, Integer, String, Date, ForeignKey, Table, Boolean, text, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 import bcrypt
@@ -12,7 +11,6 @@ import secrets
 import datetime
 from smtplib import SMTPException
 from dotenv import load_dotenv
-# ATUALIZAÇÃO: Adicionado IntegrityError
 from sqlalchemy.exc import IntegrityError
 
 # extras para e-mail API
@@ -178,7 +176,7 @@ class Reuniao(Base):
     participantes = relationship("Usuario", secondary=reuniao_participantes, back_populates="reunioes")
 
 # ============================================
-#  NOVOS MODELOS PARA VOTAÇÃO
+#  MODELOS DE VOTAÇÃO ATUALIZADOS
 # ============================================
 
 class Votacao(Base):
@@ -187,6 +185,10 @@ class Votacao(Base):
     titulo = Column(String(200), nullable=False)
     descricao = Column(String(1000), nullable=True)
     data_criacao = Column(Date, default=datetime.date.today, nullable=False)
+    # ### MUDANÇA 1: Adicionando a data de encerramento ###
+    data_encerramento = Column(Date, nullable=False)
+    # O campo is_aberta agora serve como um controle manual extra, se necessário no futuro,
+    # mas a lógica principal será a data.
     is_aberta = Column(Boolean, default=True, nullable=False)
 
     condominio_id = Column(Integer, ForeignKey('condominio.id'), nullable=False)
@@ -224,6 +226,8 @@ try:
     print("Tabelas garantidas (create_all).")
 except Exception as e:
     print("Falha ao criar tabelas no boot:", e)
+
+# ... (O restante do seu código até as rotas de votação permanece o mesmo) ...
 
 # ============================================
 # FLASK
@@ -333,11 +337,7 @@ def requer_sindico(usuario_ativo):
     if not usuario_ativo or usuario_ativo.tipo != TIPO_SINDICO:
         abort(403)
 
-# ============================================
-# ROTAS PARA CONTROLE DE PORTÃO
-# ============================================
-
-USUARIOS_AUTORIZADOS_PORTAO = ['diogodbm9@gmail.com', 'Harley Moura ']
+# ... (O restante do seu código até as rotas de votação permanece o mesmo) ...
 @app.route('/abrir_portao', methods=['GET', 'POST'])
 @login_required
 def abrir_portao():
@@ -345,6 +345,7 @@ def abrir_portao():
     try:
         user = session_db.get(Usuario, current_user.id)
         
+        # Lógica de verificação simples
         if user.nome not in USUARIOS_AUTORIZADOS_PORTAO:
             flash('Acesso negado. Você não tem permissão para abrir o portão.', 'error')
             return redirect(url_for('dashboard'))
@@ -361,13 +362,13 @@ def abrir_portao():
         return render_template('abrir_portao.html', user=user)
     finally:
         session_db.close()
-
 # ============================================
 # ROTAS DA API PARA O APLICATIVO MOBILE
 # ============================================
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
+    # Pega os dados JSON enviados pelo app, em vez de um formulário
     data = request.get_json()
     if not data or not data.get('email') or not data.get('senha'):
         return jsonify({"success": False, "message": "Email e senha são obrigatórios"}), 400
@@ -379,15 +380,17 @@ def api_login():
     try:
         usuario = session_db.query(Usuario).filter_by(email=email).first()
 
+        # Mesma lógica de validação da sua rota de login original
         if not usuario or not bcrypt.checkpw(senha.encode('utf-8'), usuario.senha.encode('utf-8')):
-            return jsonify({"success": False, "message": "Credenciais inválidas"}), 401
+            return jsonify({"success": False, "message": "Credenciais inválidas"}), 401 # 401 = Não Autorizado
 
         if not usuario.is_ativo:
-            return jsonify({"success": False, "message": "Conta desativada"}), 403
+            return jsonify({"success": False, "message": "Conta desativada"}), 403 # 403 = Proibido
 
         if usuario.tipo == TIPO_PENDENTE:
             return jsonify({"success": False, "message": "Cadastro pendente de aprovação"}), 403
 
+        # Se o login deu certo, loga o usuário na sessão e retorna sucesso com os dados do usuário
         login_user(usuario)
         
         user_data = {
@@ -401,6 +404,7 @@ def api_login():
 
     finally:
         session_db.close()
+
 
 # Rota de API para realizar o logout
 @app.route('/api/logout', methods=['POST'])
@@ -416,14 +420,17 @@ def api_abrir_portao():
     try:
         user = session_db.get(Usuario, current_user.id)
         
+        # Sua lógica de verificação de permissão existente
         if user.nome not in USUARIOS_AUTORIZADOS_PORTAO:
             return jsonify({"success": False, "message": "Você não tem permissão para abrir o portão."}), 403
 
+        # Chama sua função que aciona o dispositivo Tuya
         result = open_gate.open_gate_tuya()
         
         if result.get("success"):
             return jsonify({"success": True, "message": "Comando para abrir o portão enviado!"})
         else:
+            # Retorna a mensagem de erro específica do open_gate, se houver
             error_message = result.get('message', 'Erro desconhecido ao contatar o dispositivo.')
             return jsonify({"success": False, "message": error_message}), 500
 
@@ -446,6 +453,7 @@ def api_abrir_reclamacao():
 
     session_db = Session()
     try:
+        # Lógica para criar a reclamação no banco de dados
         nova_reclamacao = Reclamacao(
             titulo=titulo,
             descricao=descricao,
@@ -462,12 +470,14 @@ def api_abrir_reclamacao():
     finally:
         session_db.close()
 
+
 # Rota de API para buscar os dados do dashboard
 @app.route('/api/dashboard')
-@login_required
+@login_required # Garante que só um usuário logado pode acessar
 def api_dashboard():
     session_db = Session()
     try:
+        # A lógica é quase idêntica à sua rota de dashboard, mas formatamos para JSON
         usuario_ativo = session_db.get(Usuario, current_user.id)
         
         if not usuario_ativo.condominio:
@@ -479,6 +489,7 @@ def api_dashboard():
             "endereco": usuario_ativo.condominio.endereco
         }
 
+        # Buscando comunicados
         comunicados_db = session_db.query(Comunicado).filter_by(condominio_id=usuario_ativo.condominio_id).order_by(Comunicado.data_postagem.desc()).all()
         comunicados_json = [
             {
@@ -489,18 +500,19 @@ def api_dashboard():
             } for c in comunicados_db
         ]
         
+        # O app pode usar essa resposta para construir a tela do dashboard
         resposta = {
             "condominio": condominio_info,
             "comunicados": comunicados_json
+            # Você pode adicionar mais dados aqui (reuniões, despesas, etc.)
         }
         
         return jsonify(resposta)
         
     finally:
         session_db.close()
-
 # ============================================
-# ROTAS GERAIS
+# ROTAS
 # ============================================
 
 @app.route('/')
@@ -535,6 +547,7 @@ def register():
                 session['verification_code'] = verification_code
                 session['pending_registration'] = {'nome': nome, 'email': email, 'senha': senha}
 
+                # === ALTERAÇÃO: envio assíncrono (não bloqueia o worker) ===
                 send_email(
                     'Código de Verificação - CondoIQ',
                     [email],
@@ -542,6 +555,7 @@ def register():
                     async_send=True
                 )
 
+                # Em modo teste, mostrar o código na tela de verificação
                 if ALLOW_REGISTER_WITHOUT_EMAIL:
                     app.logger.warning(f'EMAIL NÃO ENVIADO (modo teste). Código: {verification_code}')
                     session['show_verification_code'] = verification_code
@@ -603,6 +617,7 @@ def register():
         return render_template('verify.html')
     return render_template('register.html')
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -645,6 +660,7 @@ def forgot_password():
                 session['reset_code'] = reset_code
                 session['reset_email'] = email
 
+                # === ALTERAÇÃO: envio assíncrono ===
                 send_email(
                     'Código de Redefinição de Senha - CondoIQ',
                     [email],
@@ -705,6 +721,7 @@ def forgot_password():
 
     return render_template('forgot_password.html', step=step)
 
+
 @app.route('/logout')
 @login_required
 def logout():
@@ -712,6 +729,8 @@ def logout():
     flash('Você saiu da sua conta.', 'success')
     return redirect(url_for('home'))
 
+
+# No app.py, na rota /dashboard:
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -724,6 +743,7 @@ def dashboard():
         condominio = usuario_ativo.condominio
 
         if usuario_ativo.tipo == TIPO_SINDICO:
+            # CORREÇÃO AQUI: adicionando a consulta para moradores pendentes
             pendentes = session_db.query(Usuario).filter(
                 Usuario.condominio_id == condominio.id,
                 Usuario.tipo == TIPO_PENDENTE
@@ -741,7 +761,7 @@ def dashboard():
                                      reunioes=reunioes_condominio,
                                      moradores=moradores_condominio,
                                      comunicados=comunicados_condominio,
-                                     pendentes=pendentes)
+                                     pendentes=pendentes) # Passando a nova variável 'pendentes'
         else:
             reunioes_morador = usuario_ativo.reunioes
             comunicados_condominio = session_db.query(Comunicado).filter_by(condominio_id=usuario_ativo.condominio_id).order_by(Comunicado.data_postagem.desc()).all()
@@ -757,9 +777,11 @@ def dashboard():
     finally:
         session_db.close()
 
+
 # ===========================
 # Gerenciar moradores (pendentes)
 # ===========================
+from sqlalchemy.exc import IntegrityError
 
 @app.route('/moradores/pendentes', endpoint='moradores_pendentes')
 @login_required
@@ -783,6 +805,7 @@ def _moradores_pendentes():
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
+
 
 @app.route('/moradores/<int:usuario_id>/negar', methods=['POST'], endpoint='negar_morador')
 @login_required
@@ -814,6 +837,8 @@ def _negar_morador(usuario_id):
     finally:
         session_db.close()
 
+
+
 @app.route('/moradores/<int:usuario_id>/aprovar', methods=['POST'], endpoint='aprovar_morador')
 @login_required
 def _aprovar_morador(usuario_id):
@@ -844,6 +869,7 @@ def _aprovar_morador(usuario_id):
         return redirect(url_for('moradores_pendentes'))
     finally:
         session_db.close()
+
 
 # ============================================
 # Gerenciar usuários (Ativos e Desativados)
@@ -898,8 +924,9 @@ def gerenciar_usuarios():
     finally:
         session_db.close()
 
+
 # ============================================
-# ROTAS DE VOTAÇÃO (NOVAS)
+# ROTAS DE VOTAÇÃO ATUALIZADAS
 # ============================================
 
 @app.route('/votacoes', methods=['GET'])
@@ -914,16 +941,20 @@ def listar_votacoes():
 
         votacoes = session_db.query(Votacao).filter(
             Votacao.condominio_id == usuario_ativo.condominio_id
-        ).order_by(Votacao.is_aberta.desc(), Votacao.data_criacao.desc()).all()
+        ).order_by(Votacao.data_encerramento.desc()).all()
 
         votos_usuario = [v.votacao_id for v in usuario_ativo.votos_dados]
+        
+        # ### MUDANÇA 2: Passando a data de hoje para o template ###
+        hoje = datetime.date.today()
 
         return render_template(
             'votacoes.html',
             user=usuario_ativo,
             votacoes=votacoes,
             votos_usuario=votos_usuario,
-            TIPO_SINDICO=TIPO_SINDICO
+            TIPO_SINDICO=TIPO_SINDICO,
+            hoje=hoje # Envia a data para o template
         )
     finally:
         session_db.close()
@@ -939,23 +970,35 @@ def criar_votacao():
         if request.method == 'POST':
             titulo = request.form.get('titulo')
             descricao = request.form.get('descricao')
+            # ### MUDANÇA 3: Capturando e validando a data de encerramento ###
+            data_encerramento_str = request.form.get('data_encerramento')
 
-            if not titulo:
-                flash('O título é obrigatório.', 'error')
+            if not titulo or not data_encerramento_str:
+                flash('Título e data de encerramento são obrigatórios.', 'error')
+                return redirect(url_for('criar_votacao'))
+            
+            data_encerramento = datetime.datetime.strptime(data_encerramento_str, '%Y-%m-%d').date()
+
+            if data_encerramento < datetime.date.today():
+                flash('A data de encerramento não pode ser no passado.', 'error')
                 return redirect(url_for('criar_votacao'))
 
             nova_votacao = Votacao(
                 titulo=titulo,
                 descricao=descricao,
                 criador_id=usuario_ativo.id,
-                condominio_id=usuario_ativo.condominio_id
+                condominio_id=usuario_ativo.condominio_id,
+                data_encerramento=data_encerramento # Salvando a nova data
             )
             session_db.add(nova_votacao)
             session_db.commit()
             flash('Votação criada com sucesso!', 'success')
             return redirect(url_for('listar_votacoes'))
+        
+        # Passa a data de hoje para o template, para o input de data
+        min_date = datetime.date.today().isoformat()
+        return render_template('criar_votacao.html', user=usuario_ativo, min_date=min_date)
 
-        return render_template('criar_votacao.html', user=usuario_ativo)
     except Exception as e:
         session_db.rollback()
         flash(f'Erro ao criar votação: {e}', 'error')
@@ -979,8 +1022,9 @@ def votar(votacao_id):
         if not votacao or votacao.condominio_id != usuario_ativo.condominio_id:
             flash('Votação não encontrada.', 'error')
             return redirect(url_for('listar_votacoes'))
-
-        if not votacao.is_aberta:
+        
+        # ### MUDANÇA 4: Lógica de verificação baseada na data ###
+        if datetime.date.today() > votacao.data_encerramento:
             flash('Esta votação está encerrada.', 'warning')
             return redirect(url_for('listar_votacoes'))
         
@@ -1004,6 +1048,9 @@ def votar(votacao_id):
     
     return redirect(url_for('listar_votacoes'))
 
+# A rota /fechar_votacao não é mais necessária para o fluxo principal,
+# mas pode ser mantida caso o síndico queira encerrar uma votação *antes* do prazo.
+# Vou mantê-la como um recurso administrativo.
 @app.route('/votacoes/<int:votacao_id>/fechar', methods=['POST'])
 @login_required
 def fechar_votacao(votacao_id):
@@ -1017,9 +1064,10 @@ def fechar_votacao(votacao_id):
             flash('Votação não encontrada.', 'error')
             return redirect(url_for('listar_votacoes'))
         
+        # Força o encerramento manual
         votacao.is_aberta = False
         session_db.commit()
-        flash('Votação encerrada.', 'success')
+        flash('Votação encerrada manualmente.', 'success')
     except Exception as e:
         session_db.rollback()
         flash(f'Erro ao encerrar votação: {e}', 'error')
@@ -1028,11 +1076,7 @@ def fechar_votacao(votacao_id):
     
     return redirect(url_for('listar_votacoes'))
 
-# ============================================
-# Outras rotas (Reclamações, Reuniões, etc.)
-# ============================================
-
-# ... (O restante do seu código de rotas continua aqui sem alterações) ...
+# ... (Restante do seu código sem alterações)
 # (Colei todo o resto do seu código abaixo para garantir que nada foi perdido)
 
 @app.route('/abrir_reclamacao', methods=['GET', 'POST'])
@@ -1526,6 +1570,8 @@ def editar_despesa(despesa_id):
     finally:
         session_db.close()
 
-# Execução local
+
+# Execução local (produção: gunicorn)
 if __name__ == '__main__':
+
     app.run(debug=True)
