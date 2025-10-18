@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Criar Nova Votação{% endblock %}
+{% block page_title %}Criar Nova Votação{% endblock %}
+
+{% block content %}
+<div class="card">
+    <form method="POST" action="{{ url_for('criar_votacao') }}">
+        <div class="form-group">
+            <label for="titulo">Título da Votação</label>
+            <input type="text" id="titulo" name="titulo" class="form-control" required>
+            <small>Ex: Aprovação da pintura da fachada.</small>
+        </div>
+        <div class="form-group">
+            <label for="descricao">Descrição (Opcional)</label>
+            <textarea id="descricao" name="descricao" class="form-control" rows="4"></textarea>
+            <small>Forneça mais detalhes sobre o que está sendo votado.</small>
+        </div>
+        <div class="form-actions">
+            <a href="{{ url_for('listar_votacoes') }}" class="btn btn-ghost">Cancelar</a>
+            <button type="submit" class="btn btn-primary">Criar Votação</button>
+        </div>
+    </form>
+</div>
+
+<style>
+    .card {
+        background: var(--card);
+        padding: 2rem;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        max-width: 700px;
+        margin: 0 auto;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font-size: 1rem;
+        box-sizing: border-box; /* Garante que padding não afete a largura total */
+    }
+    .form-group small {
+        display: block;
+        margin-top: 0.25rem;
+        color: var(--muted);
+    }
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+</style>
+{% endblock %}

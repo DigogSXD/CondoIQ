@@ -3,7 +3,8 @@ from urllib.parse import quote_plus
 from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
-from sqlalchemy import create_engine, Column, Integer, String, Date, ForeignKey, Table, Boolean, text
+# ATUALIZAÇÃO: Adicionado UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Date, ForeignKey, Table, Boolean, text, UniqueConstraint
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 import bcrypt
 import re
@@ -11,6 +12,7 @@ import secrets
 import datetime
 from smtplib import SMTPException
 from dotenv import load_dotenv
+# ATUALIZAÇÃO: Adicionado IntegrityError
 from sqlalchemy.exc import IntegrityError
 
 # extras para e-mail API
@@ -80,7 +82,7 @@ reuniao_participantes = Table(
 TIPO_SINDICO = 0
 TIPO_PENDENTE = 1
 TIPO_MORADOR = 2
-TIPO_DESATIVADO = 3  # Nova constante para morador desativado
+TIPO_DESATIVADO = 3
 
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -96,14 +98,12 @@ class Usuario(Base):
 
     condominio = relationship("Condominio", back_populates="usuarios", lazy='select')
     reunioes = relationship("Reuniao", secondary=reuniao_participantes, back_populates="participantes")
-    # AQUI ESTÁ A ALTERAÇÃO: Adicionando passive_deletes=True para a relação com reclamações
     reclamacoes = relationship("Reclamacao", back_populates="usuario", passive_deletes=True)
 
     def is_authenticated(self): return True
     def is_active(self): return self.is_ativo
     def is_anonymous(self): return False
     def get_id(self): return str(self.id)
-
 
 class Mensagem(Base):
     __tablename__ = "mensagens"
@@ -122,12 +122,10 @@ class Reclamacao(Base):
     titulo = Column(String(150), nullable=False)
     descricao = Column(String(500), nullable=False)
     data_abertura = Column(Date, default=datetime.date.today)
-    # AQUI ESTÁ A ALTERAÇÃO: nullable=True para permitir que o campo seja nulo
     usuario_id = Column(Integer, ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True)
     usuario = relationship("Usuario", back_populates="reclamacoes")
     status = Column(String(50), default="Pendente")
     mensagens = relationship("Mensagem", back_populates="reclamacao", cascade="all, delete-orphan")
-
 
 class Condominio(Base):
     __tablename__ = "condominio"
@@ -143,7 +141,6 @@ class Condominio(Base):
     despesas = relationship("Despesa", back_populates="condominio")
     reunioes = relationship("Reuniao", back_populates="condominio")
 
-
 class Comunicado(Base):
     __tablename__ = 'comunicados'
     id = Column(Integer, primary_key=True)
@@ -158,7 +155,6 @@ class Comunicado(Base):
 
 Usuario.comunicados = relationship("Comunicado", back_populates="usuario")
 Condominio.comunicados = relationship("Comunicado", back_populates="condominio")
-
 
 class Despesa(Base):
     __tablename__ = "despesas"
@@ -177,11 +173,49 @@ class Reuniao(Base):
     data = Column(Date, nullable=False)
     local = Column(String(255), nullable=False)
     condominio_id = Column(Integer, ForeignKey("condominio.id"))
-    # Adicione esta nova coluna para o link do Meet:
     meet_link = Column(String(255), nullable=True) 
-    # Mantenha as outras linhas
     condominio = relationship("Condominio", back_populates="reunioes")
     participantes = relationship("Usuario", secondary=reuniao_participantes, back_populates="reunioes")
+
+# ============================================
+#  NOVOS MODELOS PARA VOTAÇÃO
+# ============================================
+
+class Votacao(Base):
+    __tablename__ = 'votacoes'
+    id = Column(Integer, primary_key=True)
+    titulo = Column(String(200), nullable=False)
+    descricao = Column(String(1000), nullable=True)
+    data_criacao = Column(Date, default=datetime.date.today, nullable=False)
+    is_aberta = Column(Boolean, default=True, nullable=False)
+
+    condominio_id = Column(Integer, ForeignKey('condominio.id'), nullable=False)
+    criador_id = Column(Integer, ForeignKey('usuarios.id'), nullable=False)
+
+    condominio = relationship("Condominio", back_populates="votacoes")
+    criador = relationship("Usuario", back_populates="votacoes_criadas")
+    votos = relationship("Voto", back_populates="votacao", cascade="all, delete-orphan")
+
+class Voto(Base):
+    __tablename__ = 'votos'
+    id = Column(Integer, primary_key=True)
+    escolha = Column(String(10), nullable=False) # 'favor' ou 'contra'
+    votacao_id = Column(Integer, ForeignKey('votacoes.id'), nullable=False)
+    usuario_id = Column(Integer, ForeignKey('usuarios.id'), nullable=False)
+
+    votacao = relationship("Votacao", back_populates="votos")
+    votante = relationship("Usuario", back_populates="votos_dados")
+
+    __table_args__ = (
+        UniqueConstraint('votacao_id', 'usuario_id', name='_votacao_usuario_uc'),
+    )
+
+# Adicionando os relacionamentos inversos
+Usuario.votacoes_criadas = relationship("Votacao", back_populates="criador", foreign_keys=[Votacao.criador_id])
+Usuario.votos_dados = relationship("Voto", back_populates="votante", foreign_keys=[Voto.usuario_id])
+Condominio.votacoes = relationship("Votacao", back_populates="condominio")
+
+# ============================================
 
 # Garantir tabelas no boot
 try:
@@ -229,15 +263,14 @@ def load_user(user_id):
 # E-MAIL (Configuração Local)
 # ============================================
 
-
 USE_SENDGRID_API = bool(os.getenv("SENDGRID_API_KEY"))
 
 app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.sendgrid.net')
 app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', '587'))
 app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'true').lower() == 'true'
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'apikey')   # SendGrid SMTP
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')              # SendGrid API key
-app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER')  # remetente verificado
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'apikey')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER')
 
 mail = Mail(app)
 
@@ -292,7 +325,6 @@ def send_email(subject: str, recipients: list[str], body: str, html: str | None 
     else:
         return _do_send()
 
-
 # ============================================
 # HELPERS
 # ============================================
@@ -301,11 +333,9 @@ def requer_sindico(usuario_ativo):
     if not usuario_ativo or usuario_ativo.tipo != TIPO_SINDICO:
         abort(403)
 
-
 # ============================================
 # ROTAS PARA CONTROLE DE PORTÃO
 # ============================================
-
 
 USUARIOS_AUTORIZADOS_PORTAO = ['diogodbm9@gmail.com', 'Harley Moura ']
 @app.route('/abrir_portao', methods=['GET', 'POST'])
@@ -315,7 +345,6 @@ def abrir_portao():
     try:
         user = session_db.get(Usuario, current_user.id)
         
-        # Lógica de verificação simples
         if user.nome not in USUARIOS_AUTORIZADOS_PORTAO:
             flash('Acesso negado. Você não tem permissão para abrir o portão.', 'error')
             return redirect(url_for('dashboard'))
@@ -332,14 +361,13 @@ def abrir_portao():
         return render_template('abrir_portao.html', user=user)
     finally:
         session_db.close()
-        
+
 # ============================================
 # ROTAS DA API PARA O APLICATIVO MOBILE
 # ============================================
 
 @app.route('/api/login', methods=['POST'])
 def api_login():
-    # Pega os dados JSON enviados pelo app, em vez de um formulário
     data = request.get_json()
     if not data or not data.get('email') or not data.get('senha'):
         return jsonify({"success": False, "message": "Email e senha são obrigatórios"}), 400
@@ -351,17 +379,15 @@ def api_login():
     try:
         usuario = session_db.query(Usuario).filter_by(email=email).first()
 
-        # Mesma lógica de validação da sua rota de login original
         if not usuario or not bcrypt.checkpw(senha.encode('utf-8'), usuario.senha.encode('utf-8')):
-            return jsonify({"success": False, "message": "Credenciais inválidas"}), 401 # 401 = Não Autorizado
+            return jsonify({"success": False, "message": "Credenciais inválidas"}), 401
 
         if not usuario.is_ativo:
-            return jsonify({"success": False, "message": "Conta desativada"}), 403 # 403 = Proibido
+            return jsonify({"success": False, "message": "Conta desativada"}), 403
 
         if usuario.tipo == TIPO_PENDENTE:
             return jsonify({"success": False, "message": "Cadastro pendente de aprovação"}), 403
 
-        # Se o login deu certo, loga o usuário na sessão e retorna sucesso com os dados do usuário
         login_user(usuario)
         
         user_data = {
@@ -375,7 +401,6 @@ def api_login():
 
     finally:
         session_db.close()
-
 
 # Rota de API para realizar o logout
 @app.route('/api/logout', methods=['POST'])
@@ -391,17 +416,14 @@ def api_abrir_portao():
     try:
         user = session_db.get(Usuario, current_user.id)
         
-        # Sua lógica de verificação de permissão existente
         if user.nome not in USUARIOS_AUTORIZADOS_PORTAO:
             return jsonify({"success": False, "message": "Você não tem permissão para abrir o portão."}), 403
 
-        # Chama sua função que aciona o dispositivo Tuya
         result = open_gate.open_gate_tuya()
         
         if result.get("success"):
             return jsonify({"success": True, "message": "Comando para abrir o portão enviado!"})
         else:
-            # Retorna a mensagem de erro específica do open_gate, se houver
             error_message = result.get('message', 'Erro desconhecido ao contatar o dispositivo.')
             return jsonify({"success": False, "message": error_message}), 500
 
@@ -424,7 +446,6 @@ def api_abrir_reclamacao():
 
     session_db = Session()
     try:
-        # Lógica para criar a reclamação no banco de dados
         nova_reclamacao = Reclamacao(
             titulo=titulo,
             descricao=descricao,
@@ -441,14 +462,12 @@ def api_abrir_reclamacao():
     finally:
         session_db.close()
 
-
 # Rota de API para buscar os dados do dashboard
 @app.route('/api/dashboard')
-@login_required # Garante que só um usuário logado pode acessar
+@login_required
 def api_dashboard():
     session_db = Session()
     try:
-        # A lógica é quase idêntica à sua rota de dashboard, mas formatamos para JSON
         usuario_ativo = session_db.get(Usuario, current_user.id)
         
         if not usuario_ativo.condominio:
@@ -460,7 +479,6 @@ def api_dashboard():
             "endereco": usuario_ativo.condominio.endereco
         }
 
-        # Buscando comunicados
         comunicados_db = session_db.query(Comunicado).filter_by(condominio_id=usuario_ativo.condominio_id).order_by(Comunicado.data_postagem.desc()).all()
         comunicados_json = [
             {
@@ -471,19 +489,18 @@ def api_dashboard():
             } for c in comunicados_db
         ]
         
-        # O app pode usar essa resposta para construir a tela do dashboard
         resposta = {
             "condominio": condominio_info,
             "comunicados": comunicados_json
-            # Você pode adicionar mais dados aqui (reuniões, despesas, etc.)
         }
         
         return jsonify(resposta)
         
     finally:
         session_db.close()
+
 # ============================================
-# ROTAS
+# ROTAS GERAIS
 # ============================================
 
 @app.route('/')
@@ -518,7 +535,6 @@ def register():
                 session['verification_code'] = verification_code
                 session['pending_registration'] = {'nome': nome, 'email': email, 'senha': senha}
 
-                # === ALTERAÇÃO: envio assíncrono (não bloqueia o worker) ===
                 send_email(
                     'Código de Verificação - CondoIQ',
                     [email],
@@ -526,7 +542,6 @@ def register():
                     async_send=True
                 )
 
-                # Em modo teste, mostrar o código na tela de verificação
                 if ALLOW_REGISTER_WITHOUT_EMAIL:
                     app.logger.warning(f'EMAIL NÃO ENVIADO (modo teste). Código: {verification_code}')
                     session['show_verification_code'] = verification_code
@@ -588,7 +603,6 @@ def register():
         return render_template('verify.html')
     return render_template('register.html')
 
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -631,7 +645,6 @@ def forgot_password():
                 session['reset_code'] = reset_code
                 session['reset_email'] = email
 
-                # === ALTERAÇÃO: envio assíncrono ===
                 send_email(
                     'Código de Redefinição de Senha - CondoIQ',
                     [email],
@@ -692,7 +705,6 @@ def forgot_password():
 
     return render_template('forgot_password.html', step=step)
 
-
 @app.route('/logout')
 @login_required
 def logout():
@@ -700,8 +712,6 @@ def logout():
     flash('Você saiu da sua conta.', 'success')
     return redirect(url_for('home'))
 
-
-# No app.py, na rota /dashboard:
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -714,7 +724,6 @@ def dashboard():
         condominio = usuario_ativo.condominio
 
         if usuario_ativo.tipo == TIPO_SINDICO:
-            # CORREÇÃO AQUI: adicionando a consulta para moradores pendentes
             pendentes = session_db.query(Usuario).filter(
                 Usuario.condominio_id == condominio.id,
                 Usuario.tipo == TIPO_PENDENTE
@@ -726,33 +735,31 @@ def dashboard():
             comunicados_condominio = session_db.query(Comunicado).filter_by(condominio_id=condominio.id).order_by(Comunicado.data_postagem.desc()).all()
             
             return render_template('dashboard_sindico.html',
-                                   condominio=condominio,
-                                   user=usuario_ativo,
-                                   despesas=despesas_condominio,
-                                   reunioes=reunioes_condominio,
-                                   moradores=moradores_condominio,
-                                   comunicados=comunicados_condominio,
-                                   pendentes=pendentes) # Passando a nova variável 'pendentes'
+                                     condominio=condominio,
+                                     user=usuario_ativo,
+                                     despesas=despesas_condominio,
+                                     reunioes=reunioes_condominio,
+                                     moradores=moradores_condominio,
+                                     comunicados=comunicados_condominio,
+                                     pendentes=pendentes)
         else:
             reunioes_morador = usuario_ativo.reunioes
             comunicados_condominio = session_db.query(Comunicado).filter_by(condominio_id=usuario_ativo.condominio_id).order_by(Comunicado.data_postagem.desc()).all()
             
             return render_template('dashboard_morador.html',
-                                   condominio=condominio,
-                                   user=usuario_ativo,
-                                   reunioes=reunioes_morador,
-                                   comunicados=comunicados_condominio)
+                                     condominio=condominio,
+                                     user=usuario_ativo,
+                                     reunioes=reunioes_morador,
+                                     comunicados=comunicados_condominio)
     except Exception as e:
         flash(f'Ocorreu um erro: {e}', 'error')
         return redirect(url_for('home'))
     finally:
         session_db.close()
 
-
 # ===========================
 # Gerenciar moradores (pendentes)
 # ===========================
-from sqlalchemy.exc import IntegrityError
 
 @app.route('/moradores/pendentes', endpoint='moradores_pendentes')
 @login_required
@@ -776,7 +783,6 @@ def _moradores_pendentes():
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
-
 
 @app.route('/moradores/<int:usuario_id>/negar', methods=['POST'], endpoint='negar_morador')
 @login_required
@@ -808,8 +814,6 @@ def _negar_morador(usuario_id):
     finally:
         session_db.close()
 
-
-
 @app.route('/moradores/<int:usuario_id>/aprovar', methods=['POST'], endpoint='aprovar_morador')
 @login_required
 def _aprovar_morador(usuario_id):
@@ -840,7 +844,6 @@ def _aprovar_morador(usuario_id):
         return redirect(url_for('moradores_pendentes'))
     finally:
         session_db.close()
-
 
 # ============================================
 # Gerenciar usuários (Ativos e Desativados)
@@ -895,7 +898,142 @@ def gerenciar_usuarios():
     finally:
         session_db.close()
 
+# ============================================
+# ROTAS DE VOTAÇÃO (NOVAS)
+# ============================================
 
+@app.route('/votacoes', methods=['GET'])
+@login_required
+def listar_votacoes():
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        if not usuario_ativo.condominio:
+            flash('Você não está associado a um condomínio.', 'error')
+            return redirect(url_for('dashboard'))
+
+        votacoes = session_db.query(Votacao).filter(
+            Votacao.condominio_id == usuario_ativo.condominio_id
+        ).order_by(Votacao.is_aberta.desc(), Votacao.data_criacao.desc()).all()
+
+        votos_usuario = [v.votacao_id for v in usuario_ativo.votos_dados]
+
+        return render_template(
+            'votacoes.html',
+            user=usuario_ativo,
+            votacoes=votacoes,
+            votos_usuario=votos_usuario,
+            TIPO_SINDICO=TIPO_SINDICO
+        )
+    finally:
+        session_db.close()
+
+@app.route('/votacoes/criar', methods=['GET', 'POST'])
+@login_required
+def criar_votacao():
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+
+        if request.method == 'POST':
+            titulo = request.form.get('titulo')
+            descricao = request.form.get('descricao')
+
+            if not titulo:
+                flash('O título é obrigatório.', 'error')
+                return redirect(url_for('criar_votacao'))
+
+            nova_votacao = Votacao(
+                titulo=titulo,
+                descricao=descricao,
+                criador_id=usuario_ativo.id,
+                condominio_id=usuario_ativo.condominio_id
+            )
+            session_db.add(nova_votacao)
+            session_db.commit()
+            flash('Votação criada com sucesso!', 'success')
+            return redirect(url_for('listar_votacoes'))
+
+        return render_template('criar_votacao.html', user=usuario_ativo)
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Erro ao criar votação: {e}', 'error')
+        return redirect(url_for('listar_votacoes'))
+    finally:
+        session_db.close()
+
+@app.route('/votacoes/<int:votacao_id>/votar', methods=['POST'])
+@login_required
+def votar(votacao_id):
+    session_db = Session()
+    try:
+        escolha = request.form.get('escolha')
+        if not escolha in ['favor', 'contra']:
+            flash('Você precisa escolher uma opção válida.', 'error')
+            return redirect(url_for('listar_votacoes'))
+
+        votacao = session_db.get(Votacao, votacao_id)
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+
+        if not votacao or votacao.condominio_id != usuario_ativo.condominio_id:
+            flash('Votação não encontrada.', 'error')
+            return redirect(url_for('listar_votacoes'))
+
+        if not votacao.is_aberta:
+            flash('Esta votação está encerrada.', 'warning')
+            return redirect(url_for('listar_votacoes'))
+        
+        novo_voto = Voto(
+            escolha=escolha,
+            votacao_id=votacao_id,
+            usuario_id=usuario_ativo.id
+        )
+        session_db.add(novo_voto)
+        session_db.commit()
+        flash('Voto registrado com sucesso!', 'success')
+
+    except IntegrityError:
+        session_db.rollback()
+        flash('Você já votou nesta pauta.', 'warning')
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Ocorreu um erro: {e}', 'error')
+    finally:
+        session_db.close()
+    
+    return redirect(url_for('listar_votacoes'))
+
+@app.route('/votacoes/<int:votacao_id>/fechar', methods=['POST'])
+@login_required
+def fechar_votacao(votacao_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+
+        votacao = session_db.get(Votacao, votacao_id)
+        if not votacao or votacao.condominio_id != usuario_ativo.condominio_id:
+            flash('Votação não encontrada.', 'error')
+            return redirect(url_for('listar_votacoes'))
+        
+        votacao.is_aberta = False
+        session_db.commit()
+        flash('Votação encerrada.', 'success')
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Erro ao encerrar votação: {e}', 'error')
+    finally:
+        session_db.close()
+    
+    return redirect(url_for('listar_votacoes'))
+
+# ============================================
+# Outras rotas (Reclamações, Reuniões, etc.)
+# ============================================
+
+# ... (O restante do seu código de rotas continua aqui sem alterações) ...
+# (Colei todo o resto do seu código abaixo para garantir que nada foi perdido)
 
 @app.route('/abrir_reclamacao', methods=['GET', 'POST'])
 @login_required
@@ -910,12 +1048,10 @@ def abrir_reclamacao():
 
         try:
             session_db = Session()
-            # Cria a reclamação
             reclamacao = Reclamacao(titulo=titulo, descricao=descricao, usuario_id=current_user.id)
             session_db.add(reclamacao)
-            session_db.flush() # Salva a reclamação para obter o ID
+            session_db.flush()
 
-            # Cria a primeira mensagem (a própria reclamação)
             primeira_mensagem = Mensagem(
                 conteudo=descricao,
                 remetente_id=current_user.id,
@@ -936,7 +1072,6 @@ def abrir_reclamacao():
     
     return render_template('abrir_reclamacao.html')
 
-# No seu app.py, localize a rota 'reclamacao_chat' e altere-a
 
 @app.route('/reclamacoes/<int:reclamacao_id>', methods=['GET', 'POST'], endpoint='reclamacao_chat')
 @login_required
@@ -948,14 +1083,11 @@ def reclamacao_chat(reclamacao_id):
             flash('Reclamação não encontrada.', 'error')
             return redirect(url_for('dashboard'))
 
-        # Verifica se o usuário tem permissão para ver esta reclamação
         if not (current_user.id == reclamacao.usuario_id or (current_user.tipo == TIPO_SINDICO and current_user.condominio_id == reclamacao.usuario.condominio_id)):
             flash('Acesso negado.', 'error')
             return redirect(url_for('dashboard'))
 
-        # Lógica para enviar uma nova mensagem (POST)
         if request.method == 'POST':
-            # --- VERIFICAÇÃO ADICIONADA AQUI ---
             if reclamacao.status == 'Concluída':
                 flash('Não é possível enviar mensagens para uma reclamação concluída.', 'warning')
                 return redirect(url_for('reclamacao_chat', reclamacao_id=reclamacao.id))
@@ -972,7 +1104,6 @@ def reclamacao_chat(reclamacao_id):
                 flash('Mensagem enviada com sucesso!', 'success')
                 return redirect(url_for('reclamacao_chat', reclamacao_id=reclamacao.id))
         
-        # Lógica para visualizar o chat (GET)
         mensagens_chat = reclamacao.mensagens
         
         return render_template('reclamacao_chat.html', reclamacao=reclamacao, mensagens=mensagens_chat, user=current_user)
@@ -984,8 +1115,6 @@ def reclamacao_chat(reclamacao_id):
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
-
-
 
 @app.route('/reclamacoes', methods=['GET'], endpoint='lista_reclamacoes_sindico')
 @login_required
@@ -999,7 +1128,6 @@ def lista_reclamacoes_sindico():
             Usuario.condominio_id == usuario_ativo.condominio_id
         ).all()
 
-        # AQUI ESTÁ A CORREÇÃO: passando a variável 'user'
         return render_template('lista_reclamacoes_sindico.html', reclamacoes=reclamacoes, user=usuario_ativo)
     except Exception as e:
         session_db.rollback()
@@ -1009,13 +1137,11 @@ def lista_reclamacoes_sindico():
     finally:
         session_db.close()
 
-# Adicione esta nova rota no seu app.py, junto com as outras
 @app.route('/minhas_reclamacoes', methods=['GET'], endpoint='minhas_reclamacoes')
 @login_required
 def minhas_reclamacoes():
     session_db = Session()
     try:
-        # Obtém todas as reclamações do usuário logado
         reclamacoes_morador = session_db.query(Reclamacao).filter_by(usuario_id=current_user.id).all()
 
         return render_template('minhas_reclamacoes.html', reclamacoes=reclamacoes_morador, user=current_user)
@@ -1025,9 +1151,6 @@ def minhas_reclamacoes():
     finally:
         session_db.close()
 
-
-
-# No seu app.py, adicione esta rota junto das outras
 @app.route('/reclamacoes/<int:reclamacao_id>/concluir', methods=['POST'])
 @login_required
 def concluir_reclamacao(reclamacao_id):
@@ -1053,9 +1176,6 @@ def concluir_reclamacao(reclamacao_id):
     
     return redirect(url_for('lista_reclamacoes_sindico'))
 
-
-# --- Adicione esta nova rota ao seu app.py, junto com as outras ---
-# No seu app.py, localize e substitua esta rota inteira
 @app.route('/agendar_reuniao', methods=['GET', 'POST'])
 @login_required
 def agendar_reuniao():
@@ -1091,7 +1211,6 @@ def agendar_reuniao():
             nova_reuniao.participantes.extend(participantes_convidados)
             session_db.commit()
 
-            # === ALTERAÇÃO: envio assíncrono dos convites ===
             recipients = [p.email for p in participantes_convidados]
             send_email(
                 subject=f'Nova Reunião Agendada: {titulo}',
@@ -1122,8 +1241,6 @@ def agendar_reuniao():
     finally:
         session_db.close()
 
-
-# No seu arquivo app.py, localize a rota 'comunicados' e altere-a
 @app.route('/comunicados', methods=['GET', 'POST'])
 @login_required
 def comunicados():
@@ -1150,10 +1267,8 @@ def comunicados():
             session_db.commit()
 
             flash('Comunicado postado com sucesso!', 'success')
-            # CORREÇÃO: Redireciona para o dashboard, que sempre está carregado corretamente
             return redirect(url_for('dashboard')) 
         
-        # Para requisições GET, busca e exibe os comunicados
         comunicados_existentes = session_db.query(Comunicado).filter_by(
             condominio_id=usuario_ativo.condominio_id
         ).order_by(Comunicado.data_postagem.desc()).all()
@@ -1167,11 +1282,6 @@ def comunicados():
         return redirect(url_for('dashboard'))
     finally:
         session_db.close()
-
-
-
-
-# No seu arquivo app.py, adicione estas duas novas rotas:
 
 @app.route('/editar_comunicado/<int:comunicado_id>', methods=['GET', 'POST'])
 @login_required
@@ -1227,8 +1337,6 @@ def excluir_comunicado(comunicado_id):
     finally:
         session_db.close()
 
-
-# Adicione esta nova rota ao seu app.py, junto com as outras rotas:
 @app.route('/usuarios/<int:usuario_id>/excluir', methods=['POST'])
 @login_required
 def excluir_usuario(usuario_id):
@@ -1243,12 +1351,10 @@ def excluir_usuario(usuario_id):
             flash('Usuário não encontrado ou você não tem permissão para esta ação.', 'error')
             return redirect(url_for('gerenciar_usuarios'))
 
-        # Impede o síndico de excluir a si mesmo
         if usuario_a_excluir.id == usuario_ativo.id:
             flash('Você não pode excluir a si mesmo.', 'error')
             return redirect(url_for('gerenciar_usuarios'))
 
-        # Se o usuário a ser excluído for um síndico, a exclusão não é permitida sem um novo síndico
         if usuario_a_excluir.tipo == TIPO_SINDICO:
             flash('Não é possível excluir o síndico. Nomeie um novo síndico primeiro, se necessário.', 'error')
             return redirect(url_for('gerenciar_usuarios'))
@@ -1265,9 +1371,6 @@ def excluir_usuario(usuario_id):
     
     return redirect(url_for('gerenciar_usuarios'))
 
-
-
-# Adicione esta nova rota ao seu app.py, junto com as outras rotas:
 @app.route('/condominio/editar', methods=['GET', 'POST'])
 @login_required
 def editar_condominio():
@@ -1282,7 +1385,6 @@ def editar_condominio():
             return redirect(url_for('dashboard'))
 
         if request.method == 'POST':
-            # Atualiza os dados do condomínio com os dados do formulário
             condominio_a_editar.nome = request.form.get('nome')
             condominio_a_editar.endereco = request.form.get('endereco')
             condominio_a_editar.cnpj = request.form.get('cnpj')
@@ -1293,7 +1395,6 @@ def editar_condominio():
             flash('Informações do condomínio atualizadas com sucesso!', 'success')
             return redirect(url_for('dashboard'))
 
-        # Se for GET, renderiza o formulário de edição
         return render_template('editar_condominio.html', 
                                condominio=condominio_a_editar,
                                user=usuario_ativo)
@@ -1304,9 +1405,6 @@ def editar_condominio():
     finally:
         session_db.close()
 
-
-
-# Adicione esta nova rota ao seu app.py, junto com as outras:
 @app.route('/reuniao/<int:reuniao_id>/excluir', methods=['POST'])
 @login_required
 def excluir_reuniao(reuniao_id):
@@ -1333,17 +1431,14 @@ def excluir_reuniao(reuniao_id):
     
     return redirect(url_for('dashboard'))
 
-
-# listar/adicionar
 @app.route('/despesas', methods=['GET','POST'])
 @login_required
 def despesas():
     session_db = Session()
     try:
         usuario_ativo = session_db.get(Usuario, current_user.id)
-        requer_sindico(usuario_ativo)  # se quiser restringir só a síndico. Se todos podem ver, remova.
+        requer_sindico(usuario_ativo)
 
-        # POST: criar
         if request.method == 'POST':
             descricao = request.form.get('descricao')
             valor = request.form.get('valor', type=float)
@@ -1356,7 +1451,7 @@ def despesas():
 
             d = Despesa(
                 descricao=descricao,
-                valor=int(round(valor, 2)),  # se seu modelo usa Integer. Se for Decimal/Float, ajuste.
+                valor=int(round(valor, 2)),
                 data=datetime.datetime.strptime(data, '%Y-%m-%d').date(),
                 categoria=categoria,
                 condominio_id=usuario_ativo.condominio_id
@@ -1366,10 +1461,9 @@ def despesas():
             flash('Despesa adicionada.', 'success')
             return redirect(url_for('despesas'))
 
-        # GET: filtros
         q = session_db.query(Despesa).filter_by(condominio_id=usuario_ativo.condominio_id)
 
-        comp = request.args.get('competencia')  # YYYY-MM
+        comp = request.args.get('competencia')
         if comp:
             ano, mes = comp.split('-')
             q = q.filter(
@@ -1382,14 +1476,12 @@ def despesas():
             q = q.filter(Despesa.categoria == cat)
 
         despesas = q.order_by(Despesa.data.desc()).all()
-
-        categorias = ['Água', 'Energia', 'Manutenção', 'Limpeza', 'Pessoal', 'Outros']  # personalize
+        categorias = ['Água', 'Energia', 'Manutenção', 'Limpeza', 'Pessoal', 'Outros']
 
         return render_template('despesas.html', despesas=despesas, categorias=categorias)
     finally:
         session_db.close()
 
-# excluir
 @app.route('/despesas/excluir/<int:despesa_id>', methods=['POST'])
 @login_required
 def excluir_despesa(despesa_id):
@@ -1408,7 +1500,6 @@ def excluir_despesa(despesa_id):
     finally:
         session_db.close()
 
-# editar (página simples)
 @app.route('/despesas/editar/<int:despesa_id>', methods=['GET','POST'])
 @login_required
 def editar_despesa(despesa_id):
@@ -1435,8 +1526,6 @@ def editar_despesa(despesa_id):
     finally:
         session_db.close()
 
-
-# Execução local (produção: gunicorn)
+# Execução local
 if __name__ == '__main__':
-
     app.run(debug=True)

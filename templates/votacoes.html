@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}Votações{% endblock %}
+{% block page_title %}Votações do Condomínio{% endblock %}
+
+{% block content %}
+<div class="page-header-actions">
+    {% if user.tipo == TIPO_SINDICO %}
+        <a href="{{ url_for('criar_votacao') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Criar Nova Votação
+        </a>
+    {% endif %}
+</div>
+
+{% if votacoes %}
+    <div class="votacao-list">
+        {% for votacao in votacoes %}
+            <div class="votacao-card">
+                <div class="votacao-header">
+                    <h3>{{ votacao.titulo }}</h3>
+                    <span class="votacao-status {% if votacao.is_aberta %}aberta{% else %}fechada{% endif %}">
+                        {{ 'Aberta' if votacao.is_aberta else 'Encerrada' }}
+                    </span>
+                </div>
+                {% if votacao.descricao %}
+                    <p class="votacao-descricao">{{ votacao.descricao }}</p>
+                {% endif %}
+                <small class="votacao-meta">Criada em {{ votacao.data_criacao.strftime('%d/%m/%Y') }} por {{ votacao.criador.nome }}</small>
+                
+                <hr>
+
+                {% if user.tipo != TIPO_SINDICO and votacao.is_aberta and votacao.id not in votos_usuario %}
+                    <div class="vote-actions">
+                        <p><strong>Sua Opinião:</strong></p>
+                        <form action="{{ url_for('votar', votacao_id=votacao.id) }}" method="POST" class="vote-form">
+                            <button type="submit" name="escolha" value="favor" class="btn btn-success">
+                                <i class="fas fa-thumbs-up"></i> A Favor
+                            </button>
+                            <button type="submit" name="escolha" value="contra" class="btn btn-danger">
+                                <i class="fas fa-thumbs-down"></i> Contra
+                            </button>
+                        </form>
+                    </div>
+                {% endif %}
+
+                {% if votacao.id in votos_usuario %}
+                    <div class="voted-message">
+                        <i class="fas fa-check-circle"></i> Você já votou nesta pauta.
+                    </div>
+                {% endif %}
+                
+                <div class="votacao-results">
+                    <h4>Resultados:</h4>
+                    {% set votos_favor = votacao.votos|selectattr('escolha', 'equalto', 'favor')|list %}
+                    {% set votos_contra = votacao.votos|selectattr('escolha', 'equalto', 'contra')|list %}
+
+                    <div class="result-summary">
+                        <span class="result-favor"><strong>A Favor:</strong> {{ votos_favor|length }}</span>
+                        <span class="result-contra"><strong>Contra:</strong> {{ votos_contra|length }}</span>
+                    </div>
+
+                    {% if votacao.votos %}
+                        <details class="voters-details">
+                            <summary>Ver quem votou</summary>
+                            <ul class="voters-list">
+                                {% for voto in votacao.votos|sort(attribute='votante.nome') %}
+                                    <li>
+                                        <strong>{{ voto.votante.nome }}:</strong> 
+                                        <span class="voto-{{ voto.escolha }}">
+                                            {% if voto.escolha == 'favor' %}
+                                                A Favor
+                                            {% else %}
+                                                Contra
+                                            {% endif %}
+                                        </span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </details>
+                    {% else %}
+                        <p>Nenhum voto registrado ainda.</p>
+                    {% endif %}
+                </div>
+
+                {% if user.tipo == TIPO_SINDICO and votacao.is_aberta %}
+                    <div class="sindico-actions">
+                        <form action="{{ url_for('fechar_votacao', votacao_id=votacao.id) }}" method="POST">
+                            <button type="submit" class="btn btn-warning" onclick="return confirm('Tem certeza que deseja encerrar esta votação? Essa ação não pode ser desfeita.')">
+                                <i class="fas fa-lock"></i> Encerrar Votação
+                            </button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="card-empty">
+        <p>Nenhuma votação foi criada ainda.</p>
+    </div>
+{% endif %}
+
+<style>
+    .page-header-actions { margin-bottom: 2rem; text-align: right; }
+    .votacao-list { display: grid; gap: 1.5rem; }
+    .votacao-card { background: var(--card); padding: 1.5rem; border-radius: var(--radius); box-shadow: var(--shadow); border-left: 5px solid var(--primary); }
+    .votacao-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+    .votacao-header h3 { margin: 0; color: var(--primary); }
+    .votacao-status { font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 99px; text-transform: uppercase; }
+    .votacao-status.aberta { background-color: #dcfce7; color: #166534; }
+    .votacao-status.fechada { background-color: #fee2e2; color: #991b1b; }
+    .votacao-descricao { color: var(--muted); }
+    .votacao-meta { font-size: 0.8rem; color: #9ca3af; }
+    .votacao-card hr { border: none; border-top: 1px solid var(--line); margin: 1rem 0; }
+    .vote-actions, .sindico-actions, .voted-message { margin-top: 1rem; padding: 1rem; background-color: #f9fafb; border-radius: 6px; }
+    .vote-form { display: flex; gap: 1rem; }
+    .voted-message { color: var(--success); font-weight: 500; background-color: #f0fdf4; border: 1px solid #bbf7d0; }
+    .votacao-results { margin-top: 1rem; }
+    .votacao-results h4 { margin-bottom: 0.5rem; }
+    .result-summary { display: flex; gap: 2rem; margin-bottom: 1rem; font-size: 1.1rem; }
+    .result-favor { color: var(--success); }
+    .result-contra { color: var(--danger); }
+    .voters-details summary { cursor: pointer; color: var(--primary-light); font-weight: 500; }
+    .voters-list { list-style: none; padding-left: 0; margin-top: 0.5rem; max-height: 200px; overflow-y: auto; border-left: 2px solid var(--line); padding-left: 1rem; }
+    .voters-list li { padding: 4px 0; }
+    .voto-favor { color: var(--success); font-weight: bold; }
+    .voto-contra { color: var(--danger); font-weight: bold; }
+    .card-empty { text-align: center; padding: 2rem; background: var(--card); border-radius: var(--radius); color: var(--muted); }
+    .btn-warning { background-color: var(--warning); color: white; }
+    .btn-warning:hover { background-color: #b45309; }
+</style>
+{% endblock %}

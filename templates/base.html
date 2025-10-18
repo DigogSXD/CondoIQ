@@ -217,8 +217,12 @@
                         <a href="{{ url_for('dashboard') }}"><i class="fas fa-home icon-style"></i> <span>Home</span>
                         </a>
                     </li>
-                    {% if current_user.tipo == 0 %}
-                    <li class="{% if request.endpoint == 'moradores_pendentes' %}active{% endif %}">
+
+                    <li class="{% if request.endpoint in ['listar_votacoes', 'criar_votacao'] %}active{% endif %}">
+                        <a href="{{ url_for('listar_votacoes') }}"><i class="fas fa-check-to-slot"></i> <span>Votações</span></a>
+                    </li>
+
+                    {% if current_user.tipo == 0 %} <li class="{% if request.endpoint == 'moradores_pendentes' %}active{% endif %}">
                         <a href="{{ url_for('moradores_pendentes') }}"><i class="fas fa-users icon-style mb-3"></i> <span>Moradores Pendentes</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'lista_reclamacoes_sindico' %}active{% endif %}">
@@ -236,8 +240,7 @@
                     <li class="{% if request.endpoint in ['despesas', 'editar_despesa'] %}active{% endif %}">
                     <a href="{{ url_for('despesas') }}"><i class="fa-solid fa-sack-dollar"></i> <span>Despesas</span></a>
                     </li>
-                    {% else %}
-                    <li class="{% if request.endpoint == 'abrir_reclamacao' %}active{% endif %}">
+                    {% else %} <li class="{% if request.endpoint == 'abrir_reclamacao' %}active{% endif %}">
                         <a href="{{ url_for('abrir_reclamacao') }}"><i class="fa-solid fa-pen-to-square"></i> <span>Abrir Reclamação</span></a>
                     </li>
                     <li class="{% if request.endpoint == 'minhas_reclamacoes' %}active{% endif %}">
@@ -246,7 +249,7 @@
 
                     {% endif %}
                     
-                    {# Adicione a nova opção do menu aqui #}
+                    {# Link para abrir portão (comum a ambos) #}
                     {% if current_user.tipo in [0, 2] %}
                     <li class="{% if request.endpoint == 'abrir_portao' %}active{% endif %}">
                         <a href="{{ url_for('abrir_portao') }}"><span class="icon">🚗</span> <span>Abrir Portão</span></a>
