@@ -10,6 +10,13 @@
             <input type="text" id="titulo" name="titulo" class="form-control" required>
             <small>Ex: Aprovação da pintura da fachada.</small>
         </div>
+        
+        <div class="form-group">
+            <label for="data_encerramento">Data de Encerramento</label>
+            <input type="date" id="data_encerramento" name="data_encerramento" class="form-control" required min="{{ min_date }}">
+            <small>A votação será encerrada automaticamente ao final deste dia.</small>
+        </div>
+
         <div class="form-group">
             <label for="descricao">Descrição (Opcional)</label>
             <textarea id="descricao" name="descricao" class="form-control" rows="4"></textarea>
