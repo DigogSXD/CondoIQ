@@ -132,6 +132,21 @@
     .card-empty { text-align: center; padding: 2rem; background: var(--card); border-radius: var(--radius); color: var(--muted); }
     .btn-warning { background-color: var(--warning); color: white; }
     .btn-warning:hover { background-color: #b45309; }
+    .voters-list li { 
+        padding: 8px 0; 
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+    }
+    .voters-list li:last-child {
+        border-bottom: none;
+    }
+    .vote-date {
+        color: var(--muted);
+        font-size: 0.8rem;
+    }
 </style>
 {% endblock %}
+
 
