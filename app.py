@@ -202,6 +202,10 @@ class Voto(Base):
     __tablename__ = 'votos'
     id = Column(Integer, primary_key=True)
     escolha = Column(String(10), nullable=False) # 'favor' ou 'contra'
+
+    # ### ADICIONE ESTA LINHA ###
+    data_voto = Column(Date, default=datetime.date.today, nullable=False)
+
     votacao_id = Column(Integer, ForeignKey('votacoes.id'), nullable=False)
     usuario_id = Column(Integer, ForeignKey('usuarios.id'), nullable=False)
 
@@ -1575,3 +1579,4 @@ def editar_despesa(despesa_id):
 if __name__ == '__main__':
 
     app.run(debug=True)
+
