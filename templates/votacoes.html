@@ -14,38 +14,43 @@
 {% if votacoes %}
     <div class="votacao-list">
         {% for votacao in votacoes %}
+            {% set is_active = hoje <= votacao.data_encerramento and votacao.is_aberta %}
+            
             <div class="votacao-card">
                 <div class="votacao-header">
                     <h3>{{ votacao.titulo }}</h3>
-                    <span class="votacao-status {% if votacao.is_aberta %}aberta{% else %}fechada{% endif %}">
-                        {{ 'Aberta' if votacao.is_aberta else 'Encerrada' }}
+                    <span class="votacao-status {% if is_active %}aberta{% else %}fechada{% endif %}">
+                        {{ 'Aberta' if is_active else 'Encerrada' }}
                     </span>
                 </div>
                 {% if votacao.descricao %}
                     <p class="votacao-descricao">{{ votacao.descricao }}</p>
                 {% endif %}
-                <small class="votacao-meta">Criada em {{ votacao.data_criacao.strftime('%d/%m/%Y') }} por {{ votacao.criador.nome }}</small>
+                <div class="votacao-meta-container">
+                    <small class="votacao-meta">Criada em {{ votacao.data_criacao.strftime('%d/%m/%Y') }} por {{ votacao.criador.nome }}</small>
+                    <small class="votacao-meta">Encerra em: <strong>{{ votacao.data_encerramento.strftime('%d/%m/%Y') }}</strong></small>
+                </div>
                 
                 <hr>
 
-                {% if user.tipo != TIPO_SINDICO and votacao.is_aberta and votacao.id not in votos_usuario %}
-                    <div class="vote-actions">
-                        <p><strong>Sua Opinião:</strong></p>
-                        <form action="{{ url_for('votar', votacao_id=votacao.id) }}" method="POST" class="vote-form">
-                            <button type="submit" name="escolha" value="favor" class="btn btn-success">
-                                <i class="fas fa-thumbs-up"></i> A Favor
-                            </button>
-                            <button type="submit" name="escolha" value="contra" class="btn btn-danger">
-                                <i class="fas fa-thumbs-down"></i> Contra
-                            </button>
-                        </form>
-                    </div>
-                {% endif %}
-
-                {% if votacao.id in votos_usuario %}
-                    <div class="voted-message">
-                        <i class="fas fa-check-circle"></i> Você já votou nesta pauta.
-                    </div>
+                {% if is_active and user.tipo != TIPO_SINDICO %}
+                    {% if votacao.id not in votos_usuario %}
+                        <div class="vote-actions">
+                            <p><strong>Sua Opinião:</strong></p>
+                            <form action="{{ url_for('votar', votacao_id=votacao.id) }}" method="POST" class="vote-form">
+                                <button type="submit" name="escolha" value="favor" class="btn btn-success">
+                                    <i class="fas fa-thumbs-up"></i> A Favor
+                                </button>
+                                <button type="submit" name="escolha" value="contra" class="btn btn-danger">
+                                    <i class="fas fa-thumbs-down"></i> Contra
+                                </button>
+                            </form>
+                        </div>
+                    {% else %}
+                        <div class="voted-message">
+                            <i class="fas fa-check-circle"></i> Você já votou nesta pauta.
+                        </div>
+                    {% endif %}
                 {% endif %}
                 
                 <div class="votacao-results">
@@ -81,11 +86,11 @@
                     {% endif %}
                 </div>
 
-                {% if user.tipo == TIPO_SINDICO and votacao.is_aberta %}
+                {% if user.tipo == TIPO_SINDICO and is_active %}
                     <div class="sindico-actions">
                         <form action="{{ url_for('fechar_votacao', votacao_id=votacao.id) }}" method="POST">
-                            <button type="submit" class="btn btn-warning" onclick="return confirm('Tem certeza que deseja encerrar esta votação? Essa ação não pode ser desfeita.')">
-                                <i class="fas fa-lock"></i> Encerrar Votação
+                            <button type="submit" class="btn btn-warning" onclick="return confirm('Tem certeza que deseja encerrar esta votação ANTES do prazo? Essa ação não pode ser desfeita.')">
+                                <i class="fas fa-lock"></i> Encerrar Votação Manualmente
                             </button>
                         </form>
                     </div>
@@ -106,9 +111,10 @@
     .votacao-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
     .votacao-header h3 { margin: 0; color: var(--primary); }
     .votacao-status { font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 99px; text-transform: uppercase; }
-    .votacao-status.aberta { background-color: #dcfce7; color: #166534; }
-    .votacao-status.fechada { background-color: #fee2e2; color: #991b1b; }
-    .votacao-descricao { color: var(--muted); }
+    .votacao-status.aberta { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .votacao-status.fechada { background-color: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
+    .votacao-descricao { color: var(--muted); margin-top: 0; }
+    .votacao-meta-container { display: flex; flex-direction: column; gap: 0.25rem; }
     .votacao-meta { font-size: 0.8rem; color: #9ca3af; }
     .votacao-card hr { border: none; border-top: 1px solid var(--line); margin: 1rem 0; }
     .vote-actions, .sindico-actions, .voted-message { margin-top: 1rem; padding: 1rem; background-color: #f9fafb; border-radius: 6px; }
