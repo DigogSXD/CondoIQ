@@ -69,14 +69,13 @@
                             <ul class="voters-list">
                                 {% for voto in votacao.votos|sort(attribute='votante.nome') %}
                                     <li>
-                                        <strong>{{ voto.votante.nome }}:</strong> 
-                                        <span class="voto-{{ voto.escolha }}">
-                                            {% if voto.escolha == 'favor' %}
-                                                A Favor
-                                            {% else %}
-                                                Contra
-                                            {% endif %}
-                                        </span>
+                                        <div>
+                                            <strong>{{ voto.votante.nome }}:</strong>
+                                            <span class="voto-{{ voto.escolha }}">
+                                                {% if voto.escolha == 'favor' %} A Favor {% else %} Contra {% endif %}
+                                            </span>
+                                        </div>
+                                        <small class="vote-date">Votou em: {{ voto.data_voto.strftime('%d/%m/%Y') }}</small>
                                     </li>
                                 {% endfor %}
                             </ul>
@@ -135,3 +134,4 @@
     .btn-warning:hover { background-color: #b45309; }
 </style>
 {% endblock %}
+
