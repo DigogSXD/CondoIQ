@@ -1148,9 +1148,13 @@ def excluir_votacao(votacao_id):
             flash('Votação não encontrada.', 'error')
             return redirect(url_for('listar_votacoes'))
 
-        # Regra de segurança: Não permite exclusão se já houver votos.
-        if votacao_a_excluir.votos:
-            flash('Não é possível excluir uma votação que já recebeu votos.', 'warning')
+        # ### MUDANÇA: Regra de segurança atualizada ###
+        # Só permite a exclusão se a votação já estiver encerrada (pela data ou manualmente).
+        hoje = datetime.date.today()
+        is_active = hoje <= votacao_a_excluir.data_encerramento and votacao_a_excluir.is_aberta
+        
+        if is_active:
+            flash('Não é possível excluir uma votação que ainda está aberta.', 'warning')
             return redirect(url_for('listar_votacoes'))
 
         session_db.delete(votacao_a_excluir)
@@ -1662,5 +1666,6 @@ def editar_despesa(despesa_id):
 if __name__ == '__main__':
 
     app.run(debug=True)
+
 
 
