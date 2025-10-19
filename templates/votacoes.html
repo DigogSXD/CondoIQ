@@ -38,10 +38,12 @@
                         <div class="vote-actions">
                             <p><strong>Sua Opinião:</strong></p>
                             <form action="{{ url_for('votar', votacao_id=votacao.id) }}" method="POST" class="vote-form">
-                                <button type="submit" name="escolha" value="favor" class="btn btn-success" onclick="confirmVote(event, 'a favor');">
+                                <input type="hidden" name="escolha" value="">
+                                
+                                <button type="button" class="btn btn-success" onclick="confirmVote(this, 'favor');">
                                     <i class="fas fa-thumbs-up"></i> A Favor
                                 </button>
-                                <button type="submit" name="escolha" value="contra" class="btn btn-danger" onclick="confirmVote(event, 'contra');">
+                                <button type="button" class="btn btn-danger" onclick="confirmVote(this, 'contra');">
                                     <i class="fas fa-thumbs-down"></i> Contra
                                 </button>
                             </form>
@@ -149,8 +151,6 @@
     .voto-contra { color: var(--danger); font-weight: bold; }
     .vote-date { color: var(--muted); font-size: 0.8rem; }
     .card-empty { text-align: center; padding: 2rem; background: var(--card); border-radius: var(--radius); color: var(--muted); }
-    
-    /* Estilos para os novos botões */
     .sindico-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
     .inline-form { display: inline; }
     .btn-secondary { background-color: #6b7280; color: white; }
@@ -162,8 +162,13 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-    function confirmVote(event, choice) {
-        event.preventDefault();
+    // ### MUDANÇA 3: A função agora manipula o campo oculto ###
+    function confirmVote(buttonElement, choice) {
+        // Encontra o formulário pai do botão que foi clicado
+        const form = buttonElement.closest('form');
+        // Encontra o campo oculto dentro daquele formulário
+        const hiddenInput = form.querySelector('input[name="escolha"]');
+
         Swal.fire({
             title: 'Confirmar Voto',
             text: `Você tem certeza que deseja votar ${choice}? Esta ação não pode ser desfeita.`,
@@ -175,12 +180,14 @@
             cancelButtonText: 'Cancelar'
         }).then((result) => {
             if (result.isConfirmed) {
-                event.target.closest('form').submit();
+                // 1. Define o valor do campo oculto com a escolha do usuário ('favor' ou 'contra')
+                hiddenInput.value = choice;
+                // 2. Envia o formulário
+                form.submit();
             }
         });
     }
 
-    // ### MUDANÇA: Nova função para confirmar a exclusão ###
     function confirmDelete(event) {
         event.preventDefault();
         Swal.fire({
