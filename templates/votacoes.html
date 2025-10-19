@@ -38,10 +38,10 @@
                         <div class="vote-actions">
                             <p><strong>Sua Opinião:</strong></p>
                             <form action="{{ url_for('votar', votacao_id=votacao.id) }}" method="POST" class="vote-form">
-                                <button type="submit" name="escolha" value="favor" class="btn btn-success" onclick="return confirmVote('a favor');">
+                                <button type="submit" name="escolha" value="favor" class="btn btn-success" onclick="confirmVote(event, 'a favor');">
                                     <i class="fas fa-thumbs-up"></i> A Favor
                                 </button>
-                                <button type="submit" name="escolha" value="contra" class="btn btn-danger" onclick="return confirmVote('contra');">
+                                <button type="submit" name="escolha" value="contra" class="btn btn-danger" onclick="confirmVote(event, 'contra');">
                                     <i class="fas fa-thumbs-down"></i> Contra
                                 </button>
                             </form>
@@ -147,13 +147,31 @@
     .btn-warning:hover { background-color: #b45309; }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
-    function confirmVote(choice) {
-        // Cria a mensagem de confirmação personalizada
-        const message = `Você tem certeza que deseja votar ${choice}? Esta ação não pode ser desfeita.`;
-        
-        // Exibe a caixa de diálogo e retorna true (se OK) ou false (se Cancelar)
-        return window.confirm(message);
+    function confirmVote(event, choice) {
+        // 1. Previne o envio automático do formulário
+        event.preventDefault();
+
+        // 2. Mostra o alerta bonito do SweetAlert2
+        Swal.fire({
+            title: 'Confirmar Voto',
+            text: `Você tem certeza que deseja votar ${choice}? Esta ação não pode ser desfeita.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#16a34a', // Verde
+            cancelButtonColor: '#dc2626', // Vermelho
+            confirmButtonText: 'Sim, confirmar!',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            // 3. Se o usuário clicou em "Sim", envia o formulário
+            if (result.isConfirmed) {
+                // event.target é o botão que foi clicado. 
+                // .closest('form') encontra o formulário pai desse botão e o envia.
+                event.target.closest('form').submit();
+            }
+        });
     }
 </script>
 
