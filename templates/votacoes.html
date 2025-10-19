@@ -38,10 +38,10 @@
                         <div class="vote-actions">
                             <p><strong>Sua Opinião:</strong></p>
                             <form action="{{ url_for('votar', votacao_id=votacao.id) }}" method="POST" class="vote-form">
-                                <button type="submit" name="escolha" value="favor" class="btn btn-success">
+                                <button type="submit" name="escolha" value="favor" class="btn btn-success" onclick="return confirmVote('a favor');">
                                     <i class="fas fa-thumbs-up"></i> A Favor
                                 </button>
-                                <button type="submit" name="escolha" value="contra" class="btn btn-danger">
+                                <button type="submit" name="escolha" value="contra" class="btn btn-danger" onclick="return confirmVote('contra');">
                                     <i class="fas fa-thumbs-down"></i> Contra
                                 </button>
                             </form>
@@ -125,13 +125,7 @@
     .result-favor { color: var(--success); }
     .result-contra { color: var(--danger); }
     .voters-details summary { cursor: pointer; color: var(--primary-light); font-weight: 500; }
-    .voters-list { list-style: none; padding-left: 0; margin-top: 0.5rem; max-height: 200px; overflow-y: auto; border-left: 2px solid var(--line); padding-left: 1rem; }
-    .voters-list li { padding: 4px 0; }
-    .voto-favor { color: var(--success); font-weight: bold; }
-    .voto-contra { color: var(--danger); font-weight: bold; }
-    .card-empty { text-align: center; padding: 2rem; background: var(--card); border-radius: var(--radius); color: var(--muted); }
-    .btn-warning { background-color: var(--warning); color: white; }
-    .btn-warning:hover { background-color: #b45309; }
+    .voters-list { list-style: none; padding-left: 0; margin-top: 0.5rem; max-height: 250px; overflow-y: auto; }
     .voters-list li { 
         padding: 8px 0; 
         display: flex;
@@ -142,11 +136,25 @@
     .voters-list li:last-child {
         border-bottom: none;
     }
+    .voto-favor { color: var(--success); font-weight: bold; }
+    .voto-contra { color: var(--danger); font-weight: bold; }
     .vote-date {
         color: var(--muted);
         font-size: 0.8rem;
     }
+    .card-empty { text-align: center; padding: 2rem; background: var(--card); border-radius: var(--radius); color: var(--muted); }
+    .btn-warning { background-color: var(--warning); color: white; }
+    .btn-warning:hover { background-color: #b45309; }
 </style>
+
+<script>
+    function confirmVote(choice) {
+        // Cria a mensagem de confirmação personalizada
+        const message = `Você tem certeza que deseja votar ${choice}? Esta ação não pode ser desfeita.`;
+        
+        // Exibe a caixa de diálogo e retorna true (se OK) ou false (se Cancelar)
+        return window.confirm(message);
+    }
+</script>
+
 {% endblock %}
-
-
