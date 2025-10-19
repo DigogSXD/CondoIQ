@@ -1080,8 +1080,91 @@ def fechar_votacao(votacao_id):
     
     return redirect(url_for('listar_votacoes'))
 
-# ... (Restante do seu código sem alterações)
-# (Colei todo o resto do seu código abaixo para garantir que nada foi perdido)
+
+
+@app.route('/votacoes/<int:votacao_id>/editar', methods=['GET', 'POST'])
+@login_required
+def editar_votacao(votacao_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+
+        votacao_a_editar = session_db.get(Votacao, votacao_id)
+        if not votacao_a_editar or votacao_a_editar.condominio_id != usuario_ativo.condominio_id:
+            flash('Votação não encontrada.', 'error')
+            return redirect(url_for('listar_votacoes'))
+
+        # Regra de segurança: Não permite edição se já houver votos.
+        if votacao_a_editar.votos:
+            flash('Não é possível editar uma votação que já recebeu votos.', 'warning')
+            return redirect(url_for('listar_votacoes'))
+
+        if request.method == 'POST':
+            titulo = request.form.get('titulo')
+            descricao = request.form.get('descricao')
+            data_encerramento_str = request.form.get('data_encerramento')
+
+            if not titulo or not data_encerramento_str:
+                flash('Título e data de encerramento são obrigatórios.', 'error')
+                return render_template('editar_votacao.html', votacao=votacao_a_editar, min_date=datetime.date.today().isoformat())
+            
+            data_encerramento = datetime.datetime.strptime(data_encerramento_str, '%Y-%m-%d').date()
+            if data_encerramento < datetime.date.today():
+                flash('A data de encerramento não pode ser no passado.', 'error')
+                return render_template('editar_votacao.html', votacao=votacao_a_editar, min_date=datetime.date.today().isoformat())
+
+            # Atualiza os dados da votação existente
+            votacao_a_editar.titulo = titulo
+            votacao_a_editar.descricao = descricao
+            votacao_a_editar.data_encerramento = data_encerramento
+            session_db.commit()
+            
+            flash('Votação atualizada com sucesso!', 'success')
+            return redirect(url_for('listar_votacoes'))
+
+        # Para o método GET, apenas renderiza o formulário pré-preenchido
+        min_date = datetime.date.today().isoformat()
+        return render_template('editar_votacao.html', user=usuario_ativo, votacao=votacao_a_editar, min_date=min_date)
+
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Erro ao editar votação: {e}', 'error')
+        return redirect(url_for('listar_votacoes'))
+    finally:
+        session_db.close()
+
+
+@app.route('/votacoes/<int:votacao_id>/excluir', methods=['POST'])
+@login_required
+def excluir_votacao(votacao_id):
+    session_db = Session()
+    try:
+        usuario_ativo = session_db.get(Usuario, current_user.id)
+        requer_sindico(usuario_ativo)
+
+        votacao_a_excluir = session_db.get(Votacao, votacao_id)
+        if not votacao_a_excluir or votacao_a_excluir.condominio_id != usuario_ativo.condominio_id:
+            flash('Votação não encontrada.', 'error')
+            return redirect(url_for('listar_votacoes'))
+
+        # Regra de segurança: Não permite exclusão se já houver votos.
+        if votacao_a_excluir.votos:
+            flash('Não é possível excluir uma votação que já recebeu votos.', 'warning')
+            return redirect(url_for('listar_votacoes'))
+
+        session_db.delete(votacao_a_excluir)
+        session_db.commit()
+        flash('Votação excluída com sucesso!', 'success')
+
+    except Exception as e:
+        session_db.rollback()
+        flash(f'Ocorreu um erro ao excluir a votação: {e}', 'error')
+    finally:
+        session_db.close()
+    
+    return redirect(url_for('listar_votacoes'))
+
 
 @app.route('/abrir_reclamacao', methods=['GET', 'POST'])
 @login_required
@@ -1579,4 +1662,5 @@ def editar_despesa(despesa_id):
 if __name__ == '__main__':
 
     app.run(debug=True)
+
 
