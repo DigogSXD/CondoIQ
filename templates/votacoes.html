@@ -92,18 +92,14 @@
                             <a href="{{ url_for('editar_votacao', votacao_id=votacao.id) }}" class="btn btn-secondary">
                                 <i class="fas fa-pencil-alt"></i> Editar
                             </a>
-                        {% endif %}
-
-                        {% if not is_active %}
                             <form action="{{ url_for('excluir_votacao', votacao_id=votacao.id) }}" method="POST" class="inline-form">
                                 <button type="submit" class="btn btn-danger" onclick="confirmDelete(event);">
                                     <i class="fas fa-trash"></i> Excluir
                                 </button>
                             </form>
-                        {% endif %}
-
-                        {% if is_active %}
-                             <form action="{{ url_for('fechar_votacao', votacao_id=votacao.id) }}" method="POST">
+                        
+                        {% elif is_active %}
+                            <form action="{{ url_for('fechar_votacao', votacao_id=votacao.id) }}" method="POST">
                                 <button type="submit" class="btn btn-warning" onclick="return confirm('Tem certeza que deseja encerrar esta votação ANTES do prazo? Essa ação não pode ser desfeita.')">
                                     <i class="fas fa-lock"></i> Encerrar Manualmente
                                 </button>
