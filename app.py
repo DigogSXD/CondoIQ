@@ -341,7 +341,11 @@ def requer_sindico(usuario_ativo):
     if not usuario_ativo or usuario_ativo.tipo != TIPO_SINDICO:
         abort(403)
 
-# ... (O restante do seu código até as rotas de votação permanece o mesmo) ...
+# ============================================
+# ROTAS PARA CONTROLE DE PORTÃO
+# ============================================
+
+USUARIOS_AUTORIZADOS_PORTAO = ['diogodbm9@gmail.com', 'Harley Moura ']
 @app.route('/abrir_portao', methods=['GET', 'POST'])
 @login_required
 def abrir_portao():
@@ -366,6 +370,7 @@ def abrir_portao():
         return render_template('abrir_portao.html', user=user)
     finally:
         session_db.close()
+        
 # ============================================
 # ROTAS DA API PARA O APLICATIVO MOBILE
 # ============================================
