@@ -252,7 +252,7 @@
                     {# Link para abrir portão (comum a ambos) #}
                     {% if current_user.tipo in [0, 2] %}
                     <li class="{% if request.endpoint == 'abrir_portao' %}active{% endif %}">
-                        <a href="{{ url_for('abrir_portao') }}"><span class="icon">🚗</span> <span>Abrir Portão</span></a>
+                        <a href="{{ url_for('abrir_portao') }}"><i class="fa-solid fa-car"></i><span>Abrir Portão</span></a>
                     </li>
                     {% endif %}
                 </ul>
