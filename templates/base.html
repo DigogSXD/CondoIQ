@@ -201,6 +201,30 @@
             .header { flex-direction: column; align-items: flex-start; gap: 10px; }
             .user-info { margin-top: 10px; }
         }
+        /* Adicione este CSS dentro da tag <style> do seu base.html */
+        
+        .notification-link {
+            position: relative;
+            color: var(--muted);
+            font-size: 1.2rem; /* Tamanho do ícone */
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        .notification-link:hover {
+            color: var(--text);
+        }
+        .notification-count {
+            position: absolute;
+            top: -5px;
+            right: -10px;
+            background-color: var(--danger);
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 50%;
+            border: 1px solid white;
+        }
     </style>
 </head>
 <body>
@@ -269,6 +293,14 @@
                 </div>
                 <div class="user-info">
                     {% if current_user.is_authenticated %}
+                    
+                        <a href="{{ url_for('ver_notificacoes') }}" class="notification-link">
+                            <i class="fas fa-bell"></i>
+                            
+                            {% if notificacoes_nao_lidas > 0 %}
+                                <span class="notification-count">{{ notificacoes_nao_lidas }}</span>
+                            {% endif %}
+                        </a>
                         <span class="user-name">Bem-vindo, **{{ current_user.nome.split()[0] }}**!</span>
                         <a href="{{ url_for('logout') }}" class="logout-link">Sair</a>
                     {% endif %}
