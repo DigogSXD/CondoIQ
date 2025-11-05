@@ -238,7 +238,7 @@
                         <a href="{{ url_for('gerenciar_usuarios') }}"><i class="fa-solid fa-gear"></i> <span>Gerenciar Usuários</span></a>
                     </li>
                     <li class="{% if request.endpoint in ['despesas', 'editar_despesa'] %}active{% endif %}">
-                    <a href="{{ url_for('despesas') }}"><i class="fa-solid fa-sack-dollar"></i> <span>Despesas</span></a>
+                    <a href="{{ url_for('despesas') }}"><i class="fa-solid fa-dollar-sign"></i> <span>Despesas</span></a>
                     </li>
                     {% else %} <li class="{% if request.endpoint == 'abrir_reclamacao' %}active{% endif %}">
                         <a href="{{ url_for('abrir_reclamacao') }}"><i class="fa-solid fa-pen-to-square"></i> <span>Abrir Reclamação</span></a>
@@ -252,7 +252,7 @@
                     {# Link para abrir portão (comum a ambos) #}
                     {% if current_user.tipo in [0, 2] %}
                     <li class="{% if request.endpoint == 'abrir_portao' %}active{% endif %}">
-                        <a href="{{ url_for('abrir_portao') }}"><i class="fa-solid fa-car"></i><span>Abrir Portão</span></a>
+                        <a href="{{ url_for('abrir_portao') }}"><i class="fa-solid fa-car"></i> <span>Abrir Portão</span></a>
                     </li>
                     {% endif %}
                 </ul>
