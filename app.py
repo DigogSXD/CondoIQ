@@ -364,7 +364,7 @@ def requer_sindico(usuario_ativo):
 # ROTAS PARA CONTROLE DE PORTÃO
 # ============================================
 
-USUARIOS_AUTORIZADOS_PORTAO = ['Harley Moura']
+USUARIOS_AUTORIZADOS_PORTAO = ['Harley Moura, diogodbm9@gmail.com']
 @app.route('/abrir_portao', methods=['GET', 'POST'])
 @login_required
 def abrir_portao():
@@ -1758,6 +1758,7 @@ def ver_notificacoes():
 if __name__ == '__main__':
 
     app.run(debug=True)
+
 
 
 
