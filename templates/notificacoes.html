@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Suas Notificações{% endblock %}
+
+{% block page_title %}Suas Notificações{% endblock %}
+
+{% block content %}
+
+<style>
+    .notificacoes-lista {
+        list-style: none;
+        padding: 0;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .notificacao-item {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        margin-bottom: 15px;
+        box-shadow: var(--shadow);
+    }
+    .notificacao-item a {
+        display: block;
+        padding: 15px 20px;
+        text-decoration: none;
+        color: var(--text);
+    }
+    .notificacao-item.lida a {
+        color: var(--muted);
+        background: #fafafa;
+    }
+    .notificacao-titulo {
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin: 0;
+    }
+    .notificacao-data {
+        font-size: 0.9rem;
+        color: var(--muted);
+        margin-top: 5px;
+    }
+</style>
+
+<div class="notificacoes-container">
+    <ul class="notificacoes-lista">
+        {% if notificacoes %}
+            {% for notificacao in notificacoes %}
+                <li class="notificacao-item {% if notificacao.lida %}lida{% endif %}">
+                    <a href="{{ notificacao.link_url or '#' }}">
+                        <p class="notificacao-titulo">{{ notificacao.titulo }}</p>
+                        <p class="notificacao-data">{{ notificacao.data_criacao.strftime('%d/%m/%Y') }}</p>
+                    </a>
+                </li>
+            {% endfor %}
+        {% else %}
+            <li classs="notificacao-item">
+                <a href="#">
+                    <p class="notificacao-titulo">Você não tem nenhuma notificação.</p>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</div>
+
+{% endblock %}

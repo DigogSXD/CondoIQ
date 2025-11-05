@@ -97,11 +97,26 @@ class Usuario(Base):
     condominio = relationship("Condominio", back_populates="usuarios", lazy='select')
     reunioes = relationship("Reuniao", secondary=reuniao_participantes, back_populates="participantes")
     reclamacoes = relationship("Reclamacao", back_populates="usuario", passive_deletes=True)
+    notificacoes = relationship("Notificacao", back_populates="usuario", cascade="all, delete-orphan", lazy='dynamic')
 
     def is_authenticated(self): return True
     def is_active(self): return self.is_ativo
     def is_anonymous(self): return False
     def get_id(self): return str(self.id)
+
+class Notificacao(Base):
+    __tablename__ = "notificacoes"
+    id = Column(Integer, primary_key=True)
+    titulo = Column(String(255), nullable=False)
+    # O link para onde o usuário vai ao clicar
+    link_url = Column(String(255), nullable=True) 
+    data_criacao = Column(Date, default=datetime.date.today, nullable=False)
+    lida = Column(Boolean, default=False, nullable=False)
+    
+    # Chave estrangeira para o usuário que RECEBE a notificação
+    usuario_id = Column(Integer, ForeignKey('usuarios.id'), nullable=False)
+    
+    usuario = relationship("Usuario", back_populates="notificacoes")
 
 class Mensagem(Base):
     __tablename__ = "mensagens"
@@ -241,19 +256,6 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "troque_esta_chave_por_uma_muito_secreta")
 ALLOW_REGISTER_WITHOUT_EMAIL = os.getenv('ALLOW_REGISTER_WITHOUT_EMAIL', 'true').lower() == 'true'
 
-# healthz/dbcheck
-@app.get("/healthz")
-def healthz(): return "ok", 200
-
-@app.get("/dbcheck")
-def dbcheck():
-    try:
-        with engine.connect() as c:
-            c.execute(text("SELECT 1"))
-        return "db ok", 200
-    except Exception as e:
-        return f"db fail: {e}", 500
-
 # login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -266,6 +268,23 @@ def load_user(user_id):
         return session_db.query(Usuario).get(int(user_id))
     finally:
         session_db.close()
+
+@app.context_processor
+def inject_notification_count():
+    """ Injeta o número de notificações não lidas em todos os templates. """
+    if current_user.is_authenticated:
+        session_db = Session()
+        try:
+            # Pega o usuário da sessão para garantir que os dados estão atualizados
+            usuario_db = session_db.get(Usuario, current_user.id)
+            if usuario_db:
+                count = usuario_db.notificacoes.filter_by(lida=False).count()
+                return dict(notificacoes_nao_lidas=count)
+        except Exception as e:
+            app.logger.error(f"Erro ao injetar contagem de notificacoes: {e}")
+        finally:
+            session_db.close()
+    return dict(notificacoes_nao_lidas=0)
 
 # ============================================
 # E-MAIL (Configuração Local)
@@ -345,7 +364,7 @@ def requer_sindico(usuario_ativo):
 # ROTAS PARA CONTROLE DE PORTÃO
 # ============================================
 
-USUARIOS_AUTORIZADOS_PORTAO = ['diogodbm9@gmail.com', 'Harley Moura ']
+USUARIOS_AUTORIZADOS_PORTAO = ['Harley Moura']
 @app.route('/abrir_portao', methods=['GET', 'POST'])
 @login_required
 def abrir_portao():
@@ -1378,6 +1397,7 @@ def agendar_reuniao():
     finally:
         session_db.close()
 
+
 @app.route('/comunicados', methods=['GET', 'POST'])
 @login_required
 def comunicados():
@@ -1400,12 +1420,53 @@ def comunicados():
                 usuario_id=usuario_ativo.id,
                 condominio_id=usuario_ativo.condominio_id
             )
+            
             session_db.add(novo_comunicado)
-            session_db.commit()
+            session_db.flush()
 
-            flash('Comunicado postado com sucesso!', 'success')
+            try:
+                # 3. Encontra todos os moradores (tipo 2)
+                # Mudei o nome da variável para 'destinatarios'
+                destinatarios = session_db.query(Usuario).filter(
+                    Usuario.condominio_id == usuario_ativo.condominio_id,
+                    Usuario.tipo == TIPO_MORADOR # tipo 2
+                ).all()
+
+                # --- INÍCIO DA MUDANÇA ---
+                
+                # 4. Adiciona o próprio síndico à lista de destinatários
+                #    para ele ver a notificação como confirmação.
+                destinatarios.append(usuario_ativo)
+                
+                # --- FIM DA MUDANÇA ---
+
+                # 5. Define o link para onde o morador vai clicar
+                link_da_notificacao = url_for('dashboard') 
+
+                # 6. Cria uma notificação para CADA um (moradores + síndico)
+                #    Mudei 'morador' para 'pessoa'
+                for pessoa in destinatarios:
+                    notificacao = Notificacao(
+                        titulo=f"Novo Comunicado: {novo_comunicado.titulo}",
+                        link_url=link_da_notificacao,
+                        usuario_id=pessoa.id
+                    )
+                    session_db.add(notificacao)
+                
+                # 7. Agora sim, salva TUDO (comunicado + notificações)
+                session_db.commit()
+                # Mudei a mensagem de flash para refletir a mudança
+                flash('Comunicado postado e moradores (e você) notificados!', 'success')
+
+            except Exception as e:
+                # 8. Se der erro nas notificações, desfaz tudo (inclusive o comunicado)
+                session_db.rollback() 
+                app.logger.error(f"Erro ao criar notificacoes: {e}")
+                flash(f'Comunicado postado, mas falha ao notificar: {e}', 'warning')
+            
             return redirect(url_for('dashboard')) 
         
+        # O resto do seu código (método GET) permanece igual
         comunicados_existentes = session_db.query(Comunicado).filter_by(
             condominio_id=usuario_ativo.condominio_id
         ).order_by(Comunicado.data_postagem.desc()).all()
@@ -1663,11 +1724,41 @@ def editar_despesa(despesa_id):
     finally:
         session_db.close()
 
+@app.route('/notificacoes', methods=['GET'])
+@login_required
+def ver_notificacoes():
+    session_db = Session()
+    try:
+        usuario_db = session_db.get(Usuario, current_user.id)
+        
+        # 1. Busca todas as notificações do usuário, das mais novas para as mais antigas
+        notificacoes = usuario_db.notificacoes.order_by(Notificacao.data_criacao.desc()).all()
+        
+        # 2. Busca as não lidas para marcá-las como lidas
+        nao_lidas = usuario_db.notificacoes.filter_by(lida=False).all()
+        
+        for notificacao in nao_lidas:
+            notificacao.lida = True
+        
+        if nao_lidas: # Só salva no banco se houver algo para mudar
+            session_db.commit()
+            
+        return render_template('notificacoes.html', notificacoes=notificacoes)
+    
+    except Exception as e:
+        session_db.rollback()
+        app.logger.error(f"Erro ao buscar notificacoes: {e}")
+        flash('Erro ao carregar notificações.', 'error')
+        return redirect(url_for('dashboard'))
+    finally:
+        session_db.close()
+
 
 # Execução local (produção: gunicorn)
 if __name__ == '__main__':
 
     app.run(debug=True)
+
 
 
 
